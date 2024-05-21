@@ -1,7 +1,18 @@
 # Ignore metamap output files
 ./data
-*_classification_results.EM
-*_classification_results.EM.contigCoverage
-*_classification_results.EM.evidenceUnknownSpecies
-*_classification_results.EM.lengthAndIdentitiesPerMappingUnit
-
+*.EM
+*.contigCoverage
+*.evidenceUnknownSpecies
+*.lengthAndIdentitiesPerMappingUnit
+*.reads2Taxon
+*.WIMP
+*.meta
+*.unmappedReadsLengths
+*.parameters
+*.krona
+*.identitiesAndCoverage
+*.identitiesAndCoverage.pdf
+*.intermediate.names.txt
+*.intermediate.taxid.txt
+*.metamaps-wimp.mpa.txt
+*.fastq
