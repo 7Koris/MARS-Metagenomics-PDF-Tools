@@ -1,0 +1,7 @@
+# Ignore metamap output files
+./data
+*_classification_results.EM
+*_classification_results.EM.contigCoverage
+*_classification_results.EM.evidenceUnknownSpecies
+*_classification_results.EM.lengthAndIdentitiesPerMappingUnit
+
