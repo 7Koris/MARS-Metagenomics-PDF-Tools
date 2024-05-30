@@ -1,9 +1,8 @@
 import sys
 import re
 import pandas as pd
-import matplotlib as plt
+import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-
 
 def main() -> None:
     if len(sys.argv) < 3:
@@ -12,12 +11,15 @@ def main() -> None:
         
     file_prefix = sys.argv[1]
     min_plot_freq = float(sys.argv[2])
+    
+    lengths_file = file_prefix + ".EM.lengthAndIdentitiesPerMappingUnit"
+    coverage_file = file_prefix + ".EM.contigCoverage"
 
-    length_and_ids_per_mapping_unit = pd.read_csv(file_prefix + ".EM.lengthAndIdentitiesPerMappingUnit", delimiter="\t")
-    length_and_ids_per_mapping_unit = length_and_ids_per_mapping_unit[length_and_ids_per_mapping_unit["AnalysisLevel"] == "EqualCoverageUnit"] #in what cases would we not have an EqualCoverageUnit?
-    data_coverage = pd.read_csv(file_prefix + ".EM.contigCoverage", delimiter="\t")
+    lengths_and_ids = pd.read_csv(lengths_file, delimiter="\t")
+    lengths_and_ids = lengths_and_ids[lengths_and_ids["AnalysisLevel"] == "EqualCoverageUnit"] #in what cases would we not have an EqualCoverageUnit?
+    data_coverage = pd.read_csv(coverage_file, delimiter="\t")
 
-    taxon_id_counts_per_unit = length_and_ids_per_mapping_unit["ID"].value_counts() #Count of each taxonomic ID's occurrences
+    taxon_id_counts_per_unit = lengths_and_ids["ID"].value_counts() #Count of each taxonomic ID's occurrences
     taxon_id_counts_per_unit.sort_values(ascending=False, inplace=True)
     taxon_id_freq_per_unit = taxon_id_counts_per_unit / taxon_id_counts_per_unit.sum() #Frequency of each taxonomic ID's occurrences
     
@@ -44,22 +46,93 @@ def main() -> None:
                 taxon_id_2_mapping_units[taxon_id] = {}
             taxon_id_2_mapping_units[taxon_id][current_id_label] = 1 #??
             
-    plot_labels = []
-    identities_per_label = []
-    lengths_per_label = []
-  
-    pdf_output = PdfPages(file_prefix + ".identitiesAndCoverage.pdf")
-    pdf_output_coverage_plots = PdfPages(file_prefix + ".coveragePerContig_MetaMapComplete.pdf")
-    #Todo: Configure pdf
-    #See: https://matplotlib.org/stable/gallery/misc/multipage_pdf.html
-    # par(mar = c(5, 3, 5, 3), oma = c(0,0,2,0))
-    # m <- rbind(c(1,2,3), c(4, 4, 4))
-    # layout(m)
+    
     
     all_identity_densities = [] #Not sure what this is for yet
     all_identitity_min_not_0 = [] #Not sure what this is for yet
     
-    #for 
+    taxon_coverage_indices = {} #track data_coverage indices in which a given taxon id occurs
+    for index, entry in enumerate(data_coverage['taxonID']):
+        if (entry not in taxon_coverage_indices):
+            taxon_coverage_indices[entry] = []
+        taxon_coverage_indices[entry].append(index)
+    
+    all_reads_lengths = [] #Track all lengths (integers)
+    all_reads_identities = [] #Track all identities (floating point numbers)
+    all_windows_coverages = []
+    
+    
+    for taxon_id in ids_to_plot.keys():  
+        if not len(taxon_coverage_indices[int(taxon_id)]) > 0:
+                print("Error: Could not find " + taxon_id + " in " + coverage_file)
+                sys.exit(1)
+        reads_count = 0
+        for mapping_unit in taxon_id_2_mapping_units[taxon_id].keys(): #For each mapping unit; ex: 'kraken:taxid|595496|NC_012759.1'
+            reads_count = reads_count + int(taxon_id_counts_per_unit[mapping_unit])
+            coverage_indices_mapping_unit = [index for index, entry in enumerate(data_coverage['contigID']) if entry == mapping_unit ]
+            
+            if not len(coverage_indices_mapping_unit) > 0:
+                print("Error: Could not find " + mapping_unit + " in " + coverage_file)
+                sys.exit(1)
+            all_windows_coverages.append(data_coverage['readCoverage'][coverage_indices_mapping_unit])
+            
+            lengths_and_ids_mapping_unit = lengths_and_ids.loc[ lengths_and_ids['ID'] == mapping_unit ]
+            
+            if not len(lengths_and_ids_mapping_unit) > 0:
+                print("Error: Could not find " + mapping_unit + " in " + coverage_file)
+                sys.exit(1)
+                
+            all_reads_lengths = all_reads_lengths + list(lengths_and_ids_mapping_unit['Length'])
+            all_reads_identities = all_reads_identities + list(lengths_and_ids_mapping_unit['Identity'])
+
+        if not len(all_reads_lengths) == int(reads_count):
+            print("Error: taxon_id counts do not match number of read lengths")
+            sys.exit(1)
+        
+    #do plotting
+    pdf_output = PdfPages(file_prefix + ".identitiesAndCoverage.pdf")
+    for taxon_id in ids_to_plot.keys(): #Iterate through all ids that we will plot         
+        taxon_label = str(data_coverage["equalCoverageUnitLabel"][taxon_coverage_indices[int(taxon_id)][0]])
+        
+        fig = plt.figure(figsize=(12, 8))
+        fig.text(0.5, 0.95, "MetaMaps mapping summary for " + taxon_label + " (taxon ID " + str(taxon_id) + ")"  + " - " + str(reads_count) + " + mapped reads assigned", ha='center', va='center')
+        
+        #generate read length histogram
+        read_length_histogram_plot = plt.subplot2grid(loc=(0, 0), rowspan=1, colspan=1,  shape=(2, 3))
+        read_length_histogram_plot.hist(all_reads_lengths, bins=100, color='blue', edgecolor='black', linewidth=1.2)
+        read_length_histogram_plot.set_xlim(0, max(lengths_and_ids['Length']))
+        read_length_histogram_plot.set_title("Read Length Histogram")
+            
+        #generate identities bar plot
+        # read_identities_plot = plt.subplot2grid(loc=(0, 1), rowspan=1, colspan=1,  shape=(2, 3))
+        # read_identities_plot.set_title("Read Identities")
+        
+        #generate genome window coverage histogram
+        # genome_window_coverage_plot = plt.subplot2grid(loc=(0, 2), rowspan=1, colspan=1,  shape=(2, 3))
+        # genome_window_coverage_plot.set_title("Genome Window Coverage")
+        
+        #generate plot for all genome window coverages
+        # genome_wide_coverage_over_all_contigs_plot = plt.subplot2grid(loc=(1, 0), rowspan=1, colspan=3,  shape=(2, 3))
+        # genome_wide_coverage_over_all_contigs_plot.set_title("Genome Wide Coverage Over All Contigs")
+
+        fig.text(0.5, 0.01, "Coordinate concatenated genome (1000s)", ha='center', va='bottom')
+        pdf_output.savefig()
+        plt.close()
+    pdf_output.close()
+                
+                
+                
+                
+                
+                
+                
+            
+    
+        
+            
+            
+            
+            
     
 
 
