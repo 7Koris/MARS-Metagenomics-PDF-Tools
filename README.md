@@ -5,8 +5,8 @@ Python version of the Metamaps plot identities script
 
 ## Description
 
-* Main.py - Main script for plotting identities
-  * Usage: Main.py \<file prefix> \<min plot frequency>
+* plot_identities_em.py - Script for plotting identities
+  * Usage: plot_identities_em.py \<classification file prefix> \<min plot frequency>
 
 
 ## Dependencies
