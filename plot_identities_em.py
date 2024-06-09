@@ -8,6 +8,7 @@ import time
 
 def plot_identities(file_prefix, min_plot_freq) -> None:
     start_time = time.time()
+    t0 = time.time()
     
     lengths_file = file_prefix + ".EM.lengthAndIdentitiesPerMappingUnit"
     coverage_file = file_prefix + ".EM.contigCoverage"
@@ -16,12 +17,15 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
     lengths_and_ids = lengths_and_ids[lengths_and_ids["AnalysisLevel"] == "EqualCoverageUnit"] # In what cases would we not have an EqualCoverageUnit?
     data_coverage = pd.read_csv(coverage_file, delimiter="\t")
     
+    print("Data read took", time.time() - t0, "seconds to run")
+    
     counts_per_mapping_unit = pd.Series(lengths_and_ids["ID"].value_counts().sort_values(ascending=False)) # Count of each taxonomic ID's occurrences
     taxon_id_freq_per_unit = counts_per_mapping_unit / counts_per_mapping_unit.sum() # Frequency of each taxonomic ID's occurrences
 
     ids_to_plot = {} # Track id's we want to plot
     taxon_id_2_mapping_units = {} # We can plug in taxon_id and get an mapping unit label ('kraken:taxid|595496|NC_012759.1') in the future. Possibly needed because a taxon_id may have multiple mapping units?
     
+    t0 = time.time()
     # For all taxon ID counts, check if we are going to plot it
     for i in range(0, len(counts_per_mapping_unit)):
         current_id_label = counts_per_mapping_unit.index[i] # Label from ID column
@@ -40,12 +44,18 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
             if (taxon_id not in taxon_id_2_mapping_units.keys()):
                 taxon_id_2_mapping_units[taxon_id] = {}
             taxon_id_2_mapping_units[taxon_id][current_id_label] = 1 
+            
+    print("ID filtering took", time.time() - t0, "seconds to run")
+    t0 = time.time()
+          
     
     taxon_coverage_indices = {} #track data_coverage indices in which a given taxon id occurs
     for index, entry in enumerate(data_coverage['taxonID']):
         if (entry not in taxon_coverage_indices.keys()):
             taxon_coverage_indices[entry] = []
         taxon_coverage_indices[entry].append(index)
+        
+    print("Taxon coverage indices took", time.time() - t0, "seconds to run")
 
     min_id_x = None # for id plot
     max_id_x = None # for id plot
@@ -53,6 +63,7 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
     plot_dict = {} # Dictionary that will store all data we process for plotting
     
     # Process data for plotting and store in plot_dict
+    t0 = time.time()
     for taxon_id in ids_to_plot.keys():
         plot_dict[taxon_id] = {}
         
@@ -110,40 +121,10 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
         plot_dict[taxon_id]["id_freq_table"] = pd.Series(all_reads_identities_100).value_counts(normalize=True).sort_index() #Frequencies of read identity counts
         if max_id_y == None or plot_dict[taxon_id]["id_freq_table"].max() > max_id_y:
             max_id_y = plot_dict[taxon_id]["id_freq_table"].max()
-    
-    pdf_output = PdfPages(file_prefix + ".identitiesAndCoverage.pdf")
-    # Create plots
-    for taxon_id in ids_to_plot.keys():
-        fig = plt.figure(figsize=(12, 8))
-        fig.text(0.5, 0.95, "MetaMaps mapping summary for " + plot_dict[taxon_id]["taxon_label"] + " (taxon ID " + str(taxon_id) + ")"  + " - " + str(plot_dict[taxon_id]["reads_count"]) + " mapped reads assigned", ha='center', va='center')
-        
-        #generate read length histogram
-        read_length_histogram_plot = plt.subplot2grid(loc=(0, 0), rowspan=1, colspan=1,  shape=(2, 3))
-        read_length_histogram_plot.hist(plot_dict[taxon_id]["all_reads_lengths"], bins='sturges', edgecolor='black', linewidth=1.2) #R bins (breaks) default is 30
-        read_length_histogram_plot.set_xlim(0, lengths_and_ids['Length'].max())
-        read_length_histogram_plot.set_title("Read Length Histogram", fontsize='small')
-        read_length_histogram_plot.set_xlabel("Read Length", fontsize='small')
-        
-        #generate identities bar plot
-        read_identities_plot = plt.subplot2grid(loc=(0, 1), rowspan=1, colspan=1,  shape=(2, 3))
-        read_identities_plot.set_title("Read Identities", fontsize='small')
-        read_identities_plot.bar(plot_dict[taxon_id]["id_freq_table"].keys(), plot_dict[taxon_id]["id_freq_table"].values, color='blue', edgecolor='black', linewidth=1.2)
-        read_identities_plot.set_xlim(min_id_x, max_id_x)
-        read_identities_plot.set_xlabel("Identity", fontsize='small')
-        read_identities_plot.set_ylim(0, max_id_y)
-                    
-        #generate genome window coverage histogram
-        genome_window_coverage_plot = plt.subplot2grid(loc=(0, 2), rowspan=1, colspan=1,  shape=(2, 3))
-        genome_window_coverage_plot.set_title("Genome Window Coverage", fontsize='small')
-        genome_window_coverage_plot.hist(plot_dict[taxon_id]["all_windows_coverages"], bins='sturges', edgecolor='black', linewidth=1.2)
-        genome_window_coverage_plot.set_xlabel("Coverage", fontsize='small')
-        
-        # generate plot for all genome window coverages
-        genome_wide_coverage_over_all_contigs_plot = plt.subplot2grid(loc=(1, 0), rowspan=1, colspan=3,  shape=(2, 3))
-        genome_wide_coverage_over_all_contigs_plot.set_title("Genome Wide Coverage Over All Contigs", fontsize='small')
-        
-         
-        mapping_units = taxon_id_2_mapping_units[taxon_id].keys() #Get the list of all unique labels that match our taxonomic id
+
+        # mapping_units = taxon_id_2_mapping_units[taxon_id].keys() 
+        # If we want to filter mapping_units for this step, uncomment the previous line and comment out the following line
+        mapping_units = data_coverage['contigID'].loc[data_coverage['taxonID'] == int(taxon_id)].unique()
         reads_count = 0
         iterator = 1
         all_windows_coverages = []
@@ -165,13 +146,50 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
             for i in range(len(current_coverages)):
                 all_colors.append(current_color)
             iterator += 1
+        plot_dict[taxon_id]["coverage_all_contigs"] = all_windows_coverages
+        plot_dict[taxon_id]["all_colors"] = all_colors
+        plot_dict[taxon_id]["genome_wide_reads_count"] = reads_count
             
-        genome_wide_coverage_over_all_contigs_plot.scatter(list(range(len(all_windows_coverages))), all_windows_coverages, s=1, c=all_colors)
+    print("Data processing took", time.time() - t0, "seconds to run")
+    
+    pdf_output = PdfPages(file_prefix + ".identitiesAndCoverage.pdf")
+    # Create plots
+    t0 = time.time()
+    for taxon_id in ids_to_plot.keys():
+        fig = plt.figure(figsize=(12, 8))
+        fig.text(0.5, 0.95, "MetaMaps mapping summary for " + plot_dict[taxon_id]["taxon_label"] + " (taxon ID " + str(taxon_id) + ")"  + " - " + str(plot_dict[taxon_id]["reads_count"]) + " mapped reads assigned", ha='center', va='center')
+        
+        # generate read length histogram
+        read_length_histogram_plot = plt.subplot2grid(loc=(0, 0), rowspan=1, colspan=1,  shape=(2, 3))
+        read_length_histogram_plot.hist(plot_dict[taxon_id]["all_reads_lengths"], bins='sturges', edgecolor='black', linewidth=1.2) #R bins (breaks) default is 30
+        read_length_histogram_plot.set_xlim(0, lengths_and_ids['Length'].max())
+        read_length_histogram_plot.set_title("Read Length Histogram", fontsize='small')
+        read_length_histogram_plot.set_xlabel("Read Length", fontsize='small')
+        
+        # generate identities bar plot
+        read_identities_plot = plt.subplot2grid(loc=(0, 1), rowspan=1, colspan=1,  shape=(2, 3))
+        read_identities_plot.set_title("Read Identities", fontsize='small')
+        read_identities_plot.bar(plot_dict[taxon_id]["id_freq_table"].keys(), plot_dict[taxon_id]["id_freq_table"].values, color='blue', edgecolor='black', linewidth=1.2)
+        read_identities_plot.set_xlim(min_id_x, max_id_x)
+        read_identities_plot.set_xlabel("Identity", fontsize='small')
+        read_identities_plot.set_ylim(0, max_id_y)
+                    
+        # generate genome window coverage histogram
+        genome_window_coverage_plot = plt.subplot2grid(loc=(0, 2), rowspan=1, colspan=1,  shape=(2, 3))
+        genome_window_coverage_plot.set_title("Genome Window Coverage", fontsize='small')
+        genome_window_coverage_plot.hist(plot_dict[taxon_id]["all_windows_coverages"], bins='sturges', edgecolor='black', linewidth=1.2)
+        genome_window_coverage_plot.set_xlabel("Coverage", fontsize='small')
+        
+        # generate scatter plot for all genome window coverages
+        genome_wide_coverage_over_all_contigs_plot = plt.subplot2grid(loc=(1, 0), rowspan=1, colspan=3,  shape=(2, 3))        
+        genome_wide_coverage_over_all_contigs_plot.set_title("Genome-wide coverage over all contigs for " + plot_dict[taxon_id]["taxon_label"] + " (taxon ID " + str(taxon_id) + ")" + " - " + str(plot_dict[taxon_id]["genome_wide_reads_count"]) + " mapped reads assigned", fontsize='small')
+        genome_wide_coverage_over_all_contigs_plot.scatter(list(range(len(plot_dict[taxon_id]["coverage_all_contigs"]))), plot_dict[taxon_id]["coverage_all_contigs"], s=1, c=plot_dict[taxon_id]["all_colors"])
         genome_wide_coverage_over_all_contigs_plot.set_xlabel("Coordinate concatenated genome (1000s)", fontsize='small')
         
         pdf_output.savefig()
         plt.close()
-    print("PDF generation took", time.time() - start_time, "seconds to run")
+    print("Plot generations took", time.time() - t0, "seconds to run")
+    print("Total script took", time.time() - start_time, "seconds to run")
     print(str(pdf_output.get_pagecount()), "page(s) written to", pdf_output._file.fh.name)
     pdf_output.close()
 
