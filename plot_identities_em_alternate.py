@@ -1,5 +1,6 @@
 import sys
 import re
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -166,13 +167,14 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
         read_length_histogram_plot.set_title("Read Length Histogram", fontsize='small')
         read_length_histogram_plot.set_xlabel("Read Length", fontsize='small')
         
-        # generate identities bar plot
+        # generate identities pie chart
         read_identities_plot = plt.subplot2grid(loc=(0, 1), rowspan=1, colspan=1,  shape=(2, 3))
         read_identities_plot.set_title("Read Identities", fontsize='small')
-        read_identities_plot.bar(plot_dict[taxon_id]["id_freq_table"].keys(), plot_dict[taxon_id]["id_freq_table"].values, color='blue', edgecolor='black', linewidth=1.2)
-        read_identities_plot.set_xlim(min_id_x, max_id_x)
-        read_identities_plot.set_xlabel("Identity", fontsize='small')
-        read_identities_plot.set_ylim(0, max_id_y)
+        read_identities_plot.pie(plot_dict[taxon_id]["id_freq_table"].index, plot_dict[taxon_id]["id_freq_table"].values, labels=plot_dict[taxon_id]["id_freq_table"].index, autopct='%1.1f%%', labeldistance=1)
+        #read_identities_plot.bar(plot_dict[taxon_id]["id_freq_table"].keys(), plot_dict[taxon_id]["id_freq_table"].values, color='blue', edgecolor='black', linewidth=1.2)
+        #read_identities_plot.set_xlim(min_id_x, max_id_x)
+        #read_identities_plot.set_xlabel("Identity", fontsize='small')
+        #read_identities_plot.set_ylim(0, max_id_y)
                     
         # generate genome window coverage histogram
         genome_window_coverage_plot = plt.subplot2grid(loc=(0, 2), rowspan=1, colspan=1,  shape=(2, 3))
@@ -180,11 +182,12 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
         genome_window_coverage_plot.hist(plot_dict[taxon_id]["all_windows_coverages"], bins='sturges', edgecolor='black', linewidth=1.2)
         genome_window_coverage_plot.set_xlabel("Coverage", fontsize='small')
         
-        # generate scatter plot for all genome window coverages
+        # generate heat map of genome coverage
         genome_wide_coverage_over_all_contigs_plot = plt.subplot2grid(loc=(1, 0), rowspan=1, colspan=3,  shape=(2, 3))        
         genome_wide_coverage_over_all_contigs_plot.set_title("Genome-wide coverage over all contigs for " + plot_dict[taxon_id]["taxon_label"] + " (taxon ID " + str(taxon_id) + ")" + " - " + str(plot_dict[taxon_id]["genome_wide_reads_count"]) + " mapped reads assigned", fontsize='small')
-        genome_wide_coverage_over_all_contigs_plot.scatter(list(range(len(plot_dict[taxon_id]["coverage_all_contigs"]))), plot_dict[taxon_id]["coverage_all_contigs"], s=1, c=plot_dict[taxon_id]["all_colors"])
+        genome_wide_coverage_over_all_contigs_plot.imshow([plot_dict[taxon_id]["coverage_all_contigs"]], aspect='auto', cmap='hot', interpolation='bicubic')
         genome_wide_coverage_over_all_contigs_plot.set_xlabel("Coordinate concatenated genome (1000s)", fontsize='small')
+        genome_wide_coverage_over_all_contigs_plot.get_yaxis().set_visible(False)
         
         fig.tight_layout()
         pdf_output.savefig()
