@@ -170,12 +170,8 @@ def plot_identities(file_prefix, min_plot_freq) -> None:
         # generate identities pie chart
         read_identities_plot = plt.subplot2grid(loc=(0, 1), rowspan=1, colspan=1,  shape=(2, 3))
         read_identities_plot.set_title("Read Identities", fontsize='small')
-        read_identities_plot.pie(plot_dict[taxon_id]["id_freq_table"].index, plot_dict[taxon_id]["id_freq_table"].values, labels=plot_dict[taxon_id]["id_freq_table"].index, autopct='%1.1f%%', labeldistance=1)
-        #read_identities_plot.bar(plot_dict[taxon_id]["id_freq_table"].keys(), plot_dict[taxon_id]["id_freq_table"].values, color='blue', edgecolor='black', linewidth=1.2)
-        #read_identities_plot.set_xlim(min_id_x, max_id_x)
-        #read_identities_plot.set_xlabel("Identity", fontsize='small')
-        #read_identities_plot.set_ylim(0, max_id_y)
-                    
+        read_identities_plot.pie(plot_dict[taxon_id]["id_freq_table"].values, plot_dict[taxon_id]["id_freq_table"].values, labels=plot_dict[taxon_id]["id_freq_table"].index, autopct='%1.1f%%', labeldistance=1)
+        
         # generate genome window coverage histogram
         genome_window_coverage_plot = plt.subplot2grid(loc=(0, 2), rowspan=1, colspan=1,  shape=(2, 3))
         genome_window_coverage_plot.set_title("Genome Window Coverage", fontsize='small')
