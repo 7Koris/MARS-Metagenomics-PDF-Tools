@@ -198,8 +198,6 @@ def plot_identities() -> None:
     
     id_list = list(ids_to_plot.keys())
     id_list.sort(key=lambda x: plot_dict[x]["trim_mean"], reverse=True)
-    for key in id_list:
-        print(key, plot_dict[key]["trim_mean"])
     
     for taxon_id in ids_to_plot.keys():
         fig = plt.figure(figsize=(12, 8))
