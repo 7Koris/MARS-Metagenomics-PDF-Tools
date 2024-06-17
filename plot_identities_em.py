@@ -20,7 +20,6 @@ def plot_identities() -> None:
     parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
     parser.add_argument("-t", "--min-trim-mean", type=float, help="Minimum coverage trim mean value to consider a taxon ID as an outlier. Outliers will be written to a separate PDF where trim_mean <= min_trim_mean", default=0.0)
     parser.add_argument("-p", "--trim-proportion", type=float, help="Proportion of sorted coverage data to trim from both ends for outlier detection", default=0.03)
-    parser.add_argument("-s", "--sort", action="store_true", help="An additional sorted PDF containing both outlier and non-outlier data will be written. Takes longer to generate.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode")
     args = parser.parse_args()
     config = vars(args)

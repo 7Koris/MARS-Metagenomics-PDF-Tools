@@ -24,7 +24,6 @@ options:
                         Minimum coverage trim mean value to consider a taxon ID as an outlier. Outliers will be written to a separate PDF where trim_mean <= min_trim_mean (default: 0.0)
   -p TRIM_PROPORTION, --trim-proportion TRIM_PROPORTION
                         Proportion of sorted coverage data to trim from both ends for outlier detection (default: 0.03)
-  -s, --sort            An additional sorted PDF containing both outlier and non-outlier data will be written. Takes longer to generate. (default: False)
   -v, --verbose         Verbose mode (default: False)
 ```
 
