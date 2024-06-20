@@ -6,16 +6,18 @@ import argparse
 import MappingUnitData as mu
 
 
-def plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, verbose) -> None:
+def plot_identities(file_prefix, min_plot_freq, min_tm: float=0.0, trim_proportion: float=.003, output: str="", excluded_tax_ids: list[str]=[], skip_coverage_filter: bool=False, verbose: bool=False) -> None:
     start_time = time.time()
     t0 = time.time()
     
-    mu_data = mu.MappingUnitData(file_prefix)
+    mu_data = mu.MappingUnitData(file_prefix, excluded_taxon_ids=excluded_tax_ids)
     mu_data.filter_by_frequency(min_plot_freq)
     mu_data.load_coverage()
+    if not skip_coverage_filter:
+        mu_data.filter_coverage_tm_outliers(min_tm, trim_proportion, True)
     
     if verbose:
-        print("Data read took", time.time() - t0, "seconds to run")
+        print("Data read and filtering took", time.time() - t0, "seconds to run")
     
     min_id_x = None # for id plot
     max_id_x = None # for id plot
@@ -81,8 +83,15 @@ def plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, verbose
         
         for unit in mu_data.tax_id_2_mapping_units[id].keys():
             plot_dict[id]["reads_count"] += mu_data.counts_per_unit[unit] 
-            
-    pdf_output = PdfPages(file_prefix + ".EM.plots.pdf")
+    
+    if output == "":
+        pdf_output = PdfPages(file_prefix + ".plots.pdf")
+        outliers_output = PdfPages(file_prefix + ".plots.outliers.pdf")
+        all_output = PdfPages(file_prefix + ".plots.all.pdf")
+    else:
+        pdf_output = PdfPages(output + "plots.pdf")
+        outliers_output = PdfPages(output + ".outliers.pdf")
+        all_output = PdfPages(output + ".all.pdf")
     
     for taxon_id in mu_data.filtered_tax_ids.keys():
         fig = plt.figure(figsize=(12, 8))
@@ -103,7 +112,7 @@ def plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, verbose
         read_identities_plot.set_xlabel("Identity", fontsize='small')
         read_identities_plot.set_ylim(0, max_id_y)
                     
-        # # generate genome window coverage histogram
+        # generate genome window coverage histogram
         genome_window_coverage_plot = plt.subplot2grid(loc=(0, 2), rowspan=1, colspan=1,  shape=(2, 3))
         genome_window_coverage_plot.set_title("Genome Window Coverage", fontsize='small')
         genome_window_coverage_plot.hist(plot_dict[taxon_id]["coverages"], bins='sturges', edgecolor='black', linewidth=1.2)
@@ -117,10 +126,14 @@ def plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, verbose
         
         fig.tight_layout()
         
-        # if plot_dict[taxon_id]["outlier"]:
-        #     outliers_output.savefig()
-        # else:
-        pdf_output.savefig()
+        if not skip_coverage_filter:
+            if mu_data.tax_id_is_outlier[taxon_id]:
+                outliers_output.savefig()
+            else:
+                pdf_output.savefig()
+            all_output.savefig()
+        else:
+            pdf_output.savefig()
             
         plt.close()
         
@@ -129,9 +142,11 @@ def plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, verbose
         
     print(str(pdf_output.get_pagecount()), "page(s) written to", pdf_output._file.fh.name)
     pdf_output.close()
-    # if outliers_output.get_pagecount() > 0:
-    #     print(str(outliers_output.get_pagecount()), "outlier page(s) written to", outliers_output._file.fh.name)
-    #     outliers_output.close()
+    if outliers_output.get_pagecount() > 0:
+        print(str(outliers_output.get_pagecount()), "outlier page(s) written to", outliers_output._file.fh.name)
+        print(str(all_output.get_pagecount()), "page(s) written to", all_output._file.fh.name)
+        outliers_output.close()
+        all_output.close()
 
 
 if __name__ == "__main__":
@@ -146,6 +161,9 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
     parser.add_argument("-t", "--min-trim-mean", type=float, help="Minimum coverage trim mean value to consider a taxon ID as an outlier. Outliers will be written to a separate PDF where trim_mean <= min_trim_mean", default=0.0)
     parser.add_argument("-p", "--trim-proportion", type=float, help="Proportion of sorted coverage data to trim from both ends for outlier detection", default=0.003)
+    parser.add_argument("-o", "--output", type=str, help="Output file name", default="")
+    parser.add_argument("-I", "--ignore-ids", action="store_true", help="Ignore ids in the file .ignoreids")
+    parser.add_argument("-S", "--skip-coverage-filter", action="store_true", help="Skip the coverage filtering step. Saves time if you already have a .ignoreids file. Will not generate an outlier pdf.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode")
     args = parser.parse_args()
     config = vars(args)
@@ -154,6 +172,16 @@ if __name__ == "__main__":
     min_plot_freq = config["min_frequency"]
     min_tm = config["min_trim_mean"]
     trim_proportion = config["trim_proportion"]
+    output = config["output"]
+    ignore_file = config["ignore_ids"]
+    skip_coverage_filter = config["skip_coverage_filter"]
     verbose = config["verbose"]
     
-    plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, verbose)
+    excluded_tax_ids = []
+    if ignore_file:
+        for id in open(".ignoreids", "r"):
+            id = id.strip()
+            if id not in excluded_tax_ids:
+                excluded_tax_ids.append(id)
+    
+    plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, output, excluded_tax_ids, skip_coverage_filter, verbose)

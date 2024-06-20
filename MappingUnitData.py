@@ -4,7 +4,6 @@ from scipy import stats
 import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
 
-
 # todo: Add read count integrity steps
 class MappingUnitData:
     file_prefix: str
@@ -20,9 +19,10 @@ class MappingUnitData:
     tax_id_2_name: dict
     contig_2_coverages: dict
     are_coverages_loaded: bool = False
+    tax_id_is_outlier: dict
+  
     
-    
-    def __init__(self, read_file_prefix) -> None:
+    def __init__(self, read_file_prefix, excluded_taxon_ids: list[int] = []) -> None:
         self.file_prefix = read_file_prefix
         lengths_file = read_file_prefix + ".EM.lengthAndIdentitiesPerMappingUnit"
         lengths_and_ids = pd.read_csv(lengths_file, delimiter="\t")
@@ -30,6 +30,10 @@ class MappingUnitData:
         self.mapping_units = lengths_and_ids
         self.counts_per_unit = pd.Series(lengths_and_ids["ID"].value_counts().sort_values(ascending=False)) # Count of each taxonomic ID's occurrences
         self.freq_per_unit = self.counts_per_unit / self.counts_per_unit.sum() # Frequency of each taxonomic ID's
+        
+        excluded_id_dict = {}
+        for id in excluded_taxon_ids:
+            excluded_id_dict[str(id)] = 1
         
         self.tax_id_2_mapping_units = {}
         self.mapping_unit_2_tax_id = {}
@@ -44,11 +48,12 @@ class MappingUnitData:
         
             taxon_id = matches[0]
             
-            if (taxon_id not in self.tax_id_2_mapping_units.keys()):
-                self.tax_id_2_mapping_units[taxon_id] = {}
-            self.tax_id_2_mapping_units[taxon_id][current_id_label] = 1
-            self.mapping_unit_2_tax_id[current_id_label] = taxon_id
-            self.filtered_tax_ids[taxon_id] = 1
+            if taxon_id not in excluded_id_dict:
+                if (taxon_id not in self.tax_id_2_mapping_units.keys()):
+                    self.tax_id_2_mapping_units[taxon_id] = {}
+                self.tax_id_2_mapping_units[taxon_id][current_id_label] = 1
+                self.mapping_unit_2_tax_id[current_id_label] = taxon_id
+                self.filtered_tax_ids[taxon_id] = 1
         
     
     def load_coverage(self) -> None:            
@@ -107,7 +112,22 @@ class MappingUnitData:
             self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
     
     
-    def filter_by_max_avg_coverage(self, max_outlier_coverage: float, proportion) -> dict:
+    def filter_coverage_tm_outliers(self, max_outlier_coverage: float, proportion, preserve_outliers: bool=False) -> int:
+        """
+            Filters the coverage data by removing outliers based on the trimmed mean.
+
+            Args:
+                max_outlier_coverage (float): The maximum coverage value considered as an outlier.
+                proportion: The proportion of data to be trimmed from both ends when calculating the trimmed mean.
+                preserve_outliers (bool, optional): Flag indicating whether to preserve the outliers in the filtered data. Defaults to False.
+
+            Returns:
+                int: A dictionary containing the filtered tax IDs.
+
+            Raises:
+                None
+
+            """
         if self.are_coverages_loaded == False:
             print("Error: No coverage data loaded, please load coverage data before filtering by coverage")
             return
@@ -117,7 +137,11 @@ class MappingUnitData:
         temp_tax_id_2_mapping_units = {}
         temp_mapping_unit_2_tax_id = {}
         temp_filtered_tax_ids = {}
+        self.tax_id_is_outlier = {}
         for current_tax_id in self.filtered_tax_ids.keys():
+            if current_tax_id not in self.tax_id_is_outlier:
+                self.tax_id_is_outlier[current_tax_id] = False
+                
             current_contigs = self.tax_id_2_all_contigs[current_tax_id]
             all_coverages = []
             for contig in current_contigs:
@@ -132,13 +156,15 @@ class MappingUnitData:
                     temp_mapping_unit_2_tax_id[contig] = current_tax_id
                 temp_filtered_tax_ids[current_tax_id] = 1
             else:
+                self.tax_id_is_outlier[current_tax_id] = True
                 o_count += 1
-        self.tax_id_2_mapping_units = temp_tax_id_2_mapping_units
-        self.mapping_unit_2_tax_id = temp_mapping_unit_2_tax_id
-        self.filtered_tax_ids = temp_filtered_tax_ids
-        print("Number of outliers: %s" %o_count)
+        if not preserve_outliers:
+            self.tax_id_2_mapping_units = temp_tax_id_2_mapping_units
+            self.mapping_unit_2_tax_id = temp_mapping_unit_2_tax_id
+            self.filtered_tax_ids = temp_filtered_tax_ids        
+            self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
+        return o_count
         
-        self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
 
     def get_abundance_estimates(self) -> dict:
         read_count_dict = {}
@@ -159,6 +185,5 @@ class MappingUnitData:
             
         plot_dict = {}
        
-        return plot_dict
-                
-                
+        return plot_dict                
+    

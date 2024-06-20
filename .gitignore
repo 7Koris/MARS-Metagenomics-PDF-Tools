@@ -1,3 +1,6 @@
+# Ignore local project files
+*.ignoreids
+
 # Ignore metamap output files
 *.EM
 *.contigCoverage
