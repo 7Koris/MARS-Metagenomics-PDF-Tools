@@ -75,13 +75,23 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Abundance Estimates", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("classification_file_prefix", help="Prefix of the classification file")
     parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
+    parser.add_argument("-m", "--max-avg-outlier-coverage", type=float, help="Maximum average outlier coverage", default=0.0)
+    parser.add_argument("-t", "--trim-proportion", type=float, help="Proportion of coverages to trim out", default=0.003)
+    parser.add_argument("-i", "--ignore-coverage", action='store_true', help="Ignore the coverage filtering step")
     args = parser.parse_args()
     config = vars(args)
     min_freq = config["min_frequency"]
     file_prefix = config["classification_file_prefix"]
+    max_outlier_coverage = config["max_avg_outlier_coverage"]
+    proportion = config["trim_proportion"]
+    ignore_coverage = config["ignore_coverage"]
     
     mapping_units = mu.MappingUnitData(file_prefix)
     mapping_units.filter_by_frequency(min_freq)
+    
+    if not ignore_coverage:
+        mapping_units.load_coverage()
+        mapping_units.filter_by_max_avg_coverage(max_outlier_coverage, proportion)
     abundance_estimates = mapping_units.get_abundance_estimates()
     
     get_alpha_diversity(abundance_estimates)
