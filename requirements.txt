@@ -1,3 +1,4 @@
 matplotlib==3.9.0
 pandas==2.2.2
 numpy>=1.23
+ete3>=3.1.3

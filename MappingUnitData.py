@@ -1,8 +1,14 @@
 import sys
 import re
+import numpy as np
 from scipy import stats
 import pandas as pd
+import pandas as pd
 from matplotlib.backends.backend_pdf import PdfPages
+import ripleyk
+import matplotlib.pyplot as plt
+from sklearn.cluster import KMeans
+from sklearn.cluster import AgglomerativeClustering
 
 # todo: Add read count integrity steps
 class MappingUnitData:
@@ -20,9 +26,10 @@ class MappingUnitData:
     contig_2_coverages: dict
     are_coverages_loaded: bool = False
     tax_id_is_outlier: dict
+    excluded_id_dict: dict
   
     
-    def __init__(self, read_file_prefix, excluded_taxon_ids: list[int] = []) -> None:
+    def __init__(self, read_file_prefix, min_freq, excluded_taxon_ids: list[int] = []) -> None:
         self.file_prefix = read_file_prefix
         lengths_file = read_file_prefix + ".EM.lengthAndIdentitiesPerMappingUnit"
         lengths_and_ids = pd.read_csv(lengths_file, delimiter="\t")
@@ -31,9 +38,9 @@ class MappingUnitData:
         self.counts_per_unit = pd.Series(lengths_and_ids["ID"].value_counts().sort_values(ascending=False)) # Count of each taxonomic ID's occurrences
         self.freq_per_unit = self.counts_per_unit / self.counts_per_unit.sum() # Frequency of each taxonomic ID's
         
-        excluded_id_dict = {}
+        self.excluded_id_dict = {}
         for id in excluded_taxon_ids:
-            excluded_id_dict[str(id)] = 1
+            self.excluded_id_dict[str(id)] = 1
         
         self.tax_id_2_mapping_units = {}
         self.mapping_unit_2_tax_id = {}
@@ -48,13 +55,36 @@ class MappingUnitData:
         
             taxon_id = matches[0]
             
-            if taxon_id not in excluded_id_dict:
+            if taxon_id not in self.excluded_id_dict:
                 if (taxon_id not in self.tax_id_2_mapping_units.keys()):
                     self.tax_id_2_mapping_units[taxon_id] = {}
                 self.tax_id_2_mapping_units[taxon_id][current_id_label] = 1
                 self.mapping_unit_2_tax_id[current_id_label] = taxon_id
                 self.filtered_tax_ids[taxon_id] = 1
         
+        self._filter_by_frequency(min_freq)
+        
+        
+    def _filter_by_frequency(self, min_freq: float) -> dict:
+        temp_tax_id_2_mapping_units = {}
+        temp_mapping_unit_2_tax_id = {}
+        temp_filtered_tax_ids = {}
+        for current_tax_id in self.filtered_tax_ids.keys():
+            if current_tax_id in self.excluded_id_dict:
+                continue
+            current_units = self.tax_id_2_mapping_units[current_tax_id]
+            for unit in current_units:
+                current_freq = self.freq_per_unit[unit]
+                if (current_freq >= min_freq):
+                    if (current_tax_id not in temp_tax_id_2_mapping_units.keys()):
+                        temp_tax_id_2_mapping_units[current_tax_id] = {}
+                    temp_tax_id_2_mapping_units[current_tax_id][unit] = 1
+                    temp_mapping_unit_2_tax_id[unit] = current_tax_id
+                    temp_filtered_tax_ids[current_tax_id] = 1
+        self.tax_id_2_mapping_units = temp_tax_id_2_mapping_units
+        self.mapping_unit_2_tax_id = temp_mapping_unit_2_tax_id
+        self.filtered_tax_ids = temp_filtered_tax_ids
+    
     
     def load_coverage(self) -> None:            
         coverage_file = self.file_prefix + ".EM.contigCoverage"
@@ -66,6 +96,9 @@ class MappingUnitData:
         self.tax_id_2_name = {}
 
         for idx, id, name, contig, start, stop, n_bases, coverage in self.coverage_data.itertuples():
+            if id in self.excluded_id_dict:
+                continue
+            
             id = str(id)
             contig = str(contig)
             coverage = float(coverage)
@@ -88,87 +121,118 @@ class MappingUnitData:
                     self.contig_2_coverages[contig] = []
                 self.contig_2_coverages[contig].append(coverage)
         self.are_coverages_loaded = True
-
-
-    def filter_by_frequency(self, min_freq: float) -> dict:
-        temp_tax_id_2_mapping_units = {}
-        temp_mapping_unit_2_tax_id = {}
-        temp_filtered_tax_ids = {}
-        for current_tax_id in self.filtered_tax_ids.keys():
-            current_units = self.tax_id_2_mapping_units[current_tax_id]
-            for unit in current_units:
-                current_freq = self.freq_per_unit[unit]
-                if (current_freq >= min_freq):
-                    if (current_tax_id not in temp_tax_id_2_mapping_units.keys()):
-                        temp_tax_id_2_mapping_units[current_tax_id] = {}
-                    temp_tax_id_2_mapping_units[current_tax_id][unit] = 1
-                    temp_mapping_unit_2_tax_id[unit] = current_tax_id
-                    temp_filtered_tax_ids[current_tax_id] = 1
-        self.tax_id_2_mapping_units = temp_tax_id_2_mapping_units
-        self.mapping_unit_2_tax_id = temp_mapping_unit_2_tax_id
-        self.filtered_tax_ids = temp_filtered_tax_ids
-        
-        if self.are_coverages_loaded:
-            self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
     
-    
-    def filter_coverage_tm_outliers(self, max_outlier_coverage: float, proportion, preserve_outliers: bool=False) -> int:
-        """
-            Filters the coverage data by removing outliers based on the trimmed mean.
-
-            Args:
-                max_outlier_coverage (float): The maximum coverage value considered as an outlier.
-                proportion: The proportion of data to be trimmed from both ends when calculating the trimmed mean.
-                preserve_outliers (bool, optional): Flag indicating whether to preserve the outliers in the filtered data. Defaults to False.
-
-            Returns:
-                int: A dictionary containing the filtered tax IDs.
-
-            Raises:
-                None
-
-            """
+    def filter_z_score_outliers(self, non_zero_count_threshold: float, preserve_outliers: bool=False) -> int:
         if self.are_coverages_loaded == False:
             print("Error: No coverage data loaded, please load coverage data before filtering by coverage")
             return
         
         o_count = 0
-        
-        temp_tax_id_2_mapping_units = {}
-        temp_mapping_unit_2_tax_id = {}
-        temp_filtered_tax_ids = {}
+        all_k = []
+        temp_filtered_tax_ids = dict(self.filtered_tax_ids)
         self.tax_id_is_outlier = {}
-        for current_tax_id in self.filtered_tax_ids.keys():
+        for current_tax_id in temp_filtered_tax_ids.keys():
+            if current_tax_id in self.excluded_id_dict:
+                continue
+            
             if current_tax_id not in self.tax_id_is_outlier:
                 self.tax_id_is_outlier[current_tax_id] = False
-                
-            current_contigs = self.tax_id_2_all_contigs[current_tax_id]
+
             all_coverages = []
+            current_contigs = self.tax_id_2_all_contigs[current_tax_id]
             for contig in current_contigs:
                 current_coverages = self.contig_2_coverages[contig]
                 all_coverages.extend(current_coverages)
-            tm = stats.trim_mean(all_coverages, proportion)
-            if (not tm <= max_outlier_coverage):
-                if (current_tax_id not in temp_tax_id_2_mapping_units.keys()):
-                    temp_tax_id_2_mapping_units[current_tax_id] = {}
-                for contig in current_contigs:
-                    temp_tax_id_2_mapping_units[current_tax_id][contig] = 1
-                    temp_mapping_unit_2_tax_id[contig] = current_tax_id
-                temp_filtered_tax_ids[current_tax_id] = 1
-            else:
+            
+
+            indices = []
+            values = []
+            i = 0
+            #indices.append(0)
+            for val in all_coverages:
+                if val != 0:
+                    indices.append(i)
+                    values.append(val)
+                i += 1
+    
+            #values = stats.zscore(values)
+       
+            method = 'fd'
+            density = True
+            hist, edges = np.histogram(indices, bins=600, density=density, weights=values)       
+            nonzero_count = 0
+            hist_devs = stats.zscore(hist)
+            for i in range(0, len(hist)):
+                if hist_devs[i] > .025:
+                    nonzero_count += 1
+ 
+            # plt.title(current_tax_id + " significant bins: " + str(nonzero_count))
+            # plt.hist(indices, bins=600, density=density, weights=values)
+            # plt.show()
+
+            #print(current_tax_id, hist_devs)
+                    
+            if (nonzero_count <= 3):
+             
+                if not preserve_outliers:
+                    self.tax_id_2_mapping_units.pop(current_tax_id, None)
+                    self.filtered_tax_ids.pop(current_tax_id, None)
                 self.tax_id_is_outlier[current_tax_id] = True
                 o_count += 1
-        if not preserve_outliers:
-            self.tax_id_2_mapping_units = temp_tax_id_2_mapping_units
-            self.mapping_unit_2_tax_id = temp_mapping_unit_2_tax_id
-            self.filtered_tax_ids = temp_filtered_tax_ids        
+                
+        if not preserve_outliers:   
             self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
+        all_k = sorted(all_k)
+        for k in all_k:
+            print(k)
+      
+        
+        return o_count
+    
+    def filter_coverage_tm_outliers(self, max_outlier_coverage: float, proportion, preserve_outliers: bool=False) -> int:
+        if self.are_coverages_loaded == False:
+            print("Error: No coverage data loaded, please load coverage data before filtering by coverage")
+            return
+        
+        o_count = 0
+        temp_filtered_tax_ids = dict(self.filtered_tax_ids)
+        self.tax_id_is_outlier = {}
+        
+        for current_tax_id in temp_filtered_tax_ids.keys():
+            if current_tax_id in self.excluded_id_dict:
+                continue
+            
+            if current_tax_id not in self.tax_id_is_outlier:
+                self.tax_id_is_outlier[current_tax_id] = False
+
+            all_coverages = []
+            current_contigs = self.tax_id_2_all_contigs[current_tax_id]
+            for contig in current_contigs:
+                current_coverages = self.contig_2_coverages[contig]
+                all_coverages.extend(current_coverages)
+                
+            tm = stats.trim_mean(all_coverages, proportion)
+            
+            if current_tax_id == '549298':
+                print(tm)
+            if (tm <= max_outlier_coverage):
+                if not preserve_outliers:
+                    self.tax_id_2_mapping_units.pop(current_tax_id, None)
+                    self.filtered_tax_ids.pop(current_tax_id, None)
+                self.tax_id_is_outlier[current_tax_id] = True
+                o_count += 1
+                
+        if not preserve_outliers:   
+            self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
+            
         return o_count
         
 
     def get_abundance_estimates(self) -> dict:
         read_count_dict = {}
         for current_tax_id in self.filtered_tax_ids.keys():
+            if current_tax_id in self.excluded_id_dict:
+                continue
             current_units = self.tax_id_2_mapping_units[current_tax_id]
             for unit in current_units:
                 if current_tax_id not in read_count_dict:
@@ -176,14 +240,5 @@ class MappingUnitData:
                 else:
                     read_count_dict[current_tax_id] += self.counts_per_unit[unit]
         sorted_read_count_dict = {k: v for k, v in sorted(read_count_dict.items(), key=lambda item: item[1])}
-        return sorted_read_count_dict
-    
-    
-    def construct_plot_dict(self) -> dict:
-        if self.are_coverages_loaded == False:
-            print("Error: No coverage data loaded, please load coverage data before generating plot dict")
-            
-        plot_dict = {}
-       
-        return plot_dict                
+        return sorted_read_count_dict          
     

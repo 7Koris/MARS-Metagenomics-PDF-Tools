@@ -10,11 +10,11 @@ def plot_identities(file_prefix, min_plot_freq, min_tm: float=0.0, trim_proporti
     start_time = time.time()
     t0 = time.time()
     
-    mu_data = mu.MappingUnitData(file_prefix, excluded_taxon_ids=excluded_tax_ids)
-    mu_data.filter_by_frequency(min_plot_freq)
+    mu_data = mu.MappingUnitData(file_prefix, min_plot_freq, excluded_taxon_ids=excluded_tax_ids)
     mu_data.load_coverage()
     if not skip_coverage_filter:
-        mu_data.filter_coverage_tm_outliers(min_tm, trim_proportion, True)
+        #mu_data.filter_coverage_tm_outliers(min_tm, trim_proportion, True)
+        mu_data.filter_z_score_outliers(50, True)
     
     if verbose:
         print("Data read and filtering took", time.time() - t0, "seconds to run")
