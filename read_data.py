@@ -4,14 +4,168 @@ import numpy as np
 from scipy import stats
 import pandas as pd
 import pandas as pd
-from matplotlib.backends.backend_pdf import PdfPages
-import ripleyk
+from taxonomy import TaxDict
 import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans
-from sklearn.cluster import AgglomerativeClustering
 
-# todo: Add read count integrity steps
-class MappingUnitData:
+class Read:
+    assigned_taxon_id = None # Assigned taxon ID (Not necessarily species level)
+    hash = None # Unique hash to identify read
+    
+    def get_assignment(self):
+        return self.assigned_taxon_id
+    
+    def __init__(self, hash: str, id):
+        self.hash = hash
+        self.assigned_taxon_id = id
+    
+     
+        
+
+class ReadData:
+    # Class for loading and processing read data
+    
+    _id_blacklist_dict: dict = {} # Dict of ids to exclude/ignore of format: <numeric taxon id, Bool>, True if excluded
+    _tax_dict: TaxDict # Dictionary of taxon IDs and read counts assigned for each ID
+    _incidence_dict: dict = {} # Dictionary of taxon IDs based on being seen in reads <taxonID, bool>
+    reads = dict() # Dictionary of reads given hash
+    
+    
+    # TODO: Implement BLACKLIST
+    def __init__(self, rebuild_database = False, id_blacklist_dict: dict = {}) -> None:
+        self._id_blacklist_dict = id_blacklist_dict
+        self._tax_dict = TaxDict(rebuild_database)
+        self._incidence_dict = dict()
+        self.reads = dict()
+        
+    
+    def get_tax_dict(self) -> TaxDict:
+        self._tax_dict = TaxDict(False)
+        for read in self.reads.values():
+            if isinstance(read.assigned_taxon_id, list):
+                print("Warning: Read %s assigned to multiple taxon IDs, cannot insert into tax_dict. Please resolve to LCA first using resolve_lca()" % read.hash)
+                continue
+            self._tax_dict.insert_id(read.assigned_taxon_id, 1)
+        return self._tax_dict
+    
+        
+    def _insert_read(self, new_read: Read) -> None:
+        if new_read.hash in self.reads:
+            print("Error: Read %s already parsed" % new_read.hash)
+            sys.exit(1)
+        self.reads[new_read.hash] = new_read    
+    
+    def prune_non_incidental_reads(self) -> int:
+        """
+        Remove reads not in incidence dictionary
+        """
+        read_keys = list(self.reads.keys())
+        reads_deleted = 0
+        start_read_count = len(read_keys)
+        for read in read_keys:
+            if read not in self._incidence_dict:
+                self.reads.pop(read)
+                reads_deleted += 1
+        print("Pruned %d reads" % reads_deleted + " of %d" % start_read_count)
+        return reads_deleted
+    
+    
+    def resolve_lca(self) -> None:
+        for read in self.reads:
+            current_read = self.reads[read]
+            if isinstance(current_read.assigned_taxon_id, list):
+                lca = self._tax_dict.get_lca_id(current_read.assigned_taxon_id)
+                if lca == 0:
+                    print("Error: No LCA found for read %s" % read)
+                    sys.exit(1)
+                current_read.assigned_taxon_id = lca
+
+        
+    def parse_mtsv_reads(self, read_file_name: str, lookup_file_name: str, incidence_only: bool = False) -> None:
+        print("Parsing MTSV reads")
+        lookup_dict = {} # Convert read id to hash
+        file = lookup_file_name
+        opened_file = open(file, "r")
+        lines = opened_file.readlines()
+        opened_file.close()
+        
+        for line in lines:
+            (read_id, hash) = line.split()
+            lookup_dict[read_id] = hash
+        
+        file = read_file_name
+        opened_file = open(file, "r")
+        lines = opened_file.readlines()
+        opened_file.close()
+        
+        for line in lines:
+            read_id = line.split(":")[0]
+            hash = lookup_dict[read_id]
+            assignments = re.findall(":(.*=.*|,)", line)
+            assignments = re.split(",", assignments[0])            
+            min_distance = None
+            min_ids = []
+            
+            for assignment in assignments:
+                assignment = re.split("=", assignment)
+                
+                if len(assignment) != 2:
+                    sys.exit("Error: Invalid assignment format")
+                    
+                id = assignment[0]
+                distance = assignment[1]
+                
+                if min_distance == None or distance < min_distance:
+                    min_distance = distance
+                    
+            for assignment in assignments:
+                assignment = re.split("=", assignment)
+                id = assignment[0]
+                distance = assignment[1]
+                
+                if distance == min_distance:
+                    min_ids.append(id)
+            
+            if incidence_only:
+                self._incidence_dict[hash] = 1
+                # for id in min_ids:
+                #     self._incidence_dict[id] = 1
+                continue
+
+            if len(min_ids) == 1:
+              new_read = Read(hash, min_ids[0])
+              self._insert_read(new_read)
+            elif len(min_ids) > 1:
+                new_read = Read(hash, min_ids)
+                self._insert_read(new_read)
+            else:
+                sys.exit("Error: No taxon ID found for read %s" % read_id, "Is there a formatting error?")
+
+
+    def parse_metamaps_reads_2_taxon(self, reads_2_taxon_file_name: str, incidence_only: bool = False) -> None:
+        print("Parsing MetaMaps reads")
+        file = reads_2_taxon_file_name
+        opened_file = open(file, "r")
+        lines = opened_file.readlines()
+        opened_file.close()
+        for line in lines:
+            (hash, id) = line.split("\t")
+            id = id.strip()
+            hash = hash.strip()
+            
+            if id == "0": # Unassigned
+                continue
+            
+            if incidence_only:
+                self._incidence_dict[hash] = 1
+                continue
+            
+            new_read = Read(hash, id)
+            
+            self._insert_read(new_read)
+            
+
+# MetaMaps read data exclusively for plotting
+class ReadDataMM:  
     file_prefix: str
     mapping_units: pd.DataFrame
     coverage_data: pd.DataFrame
@@ -27,10 +181,33 @@ class MappingUnitData:
     are_coverages_loaded: bool = False
     tax_id_is_outlier: dict
     excluded_id_dict: dict
-  
+    min_freq: float = 0.0
     
-    def __init__(self, read_file_prefix, min_freq, excluded_taxon_ids: list[int] = []) -> None:
-        self.file_prefix = read_file_prefix
+    tax_dict: TaxDict
+    reads: list
+    
+    def reset(self) -> None:
+        self.file_prefix = None
+        self.mapping_units = None
+        self.coverage_data = None
+        self.counts_per_unit = None
+        self.freq_per_unit = None
+        self.tax_id_2_mapping_units = None
+        self.mapping_unit_2_tax_id = None
+        self.filtered_tax_ids = None
+        self.tax_id_2_filtered_contigs = None
+        self.tax_id_2_all_contigs = None
+        self.tax_id_2_name = None
+        self.contig_2_coverages = None
+        self.are_coverages_loaded = None
+        self.tax_id_is_outlier = None
+        self.excluded_id_dict = None
+        self.min_freq = None
+        self.tax_dict = TaxDict()
+        self.reads = []
+  
+  
+    def parse_metamaps_data(self, read_file_prefix: str, min_freq: float, excluded_taxon_ids: list[int] = []):
         lengths_file = read_file_prefix + ".EM.lengthAndIdentitiesPerMappingUnit"
         lengths_and_ids = pd.read_csv(lengths_file, delimiter="\t")
         lengths_and_ids = lengths_and_ids[lengths_and_ids["AnalysisLevel"] == "EqualCoverageUnit"]
@@ -39,12 +216,15 @@ class MappingUnitData:
         self.freq_per_unit = self.counts_per_unit / self.counts_per_unit.sum() # Frequency of each taxonomic ID's
         
         self.excluded_id_dict = {}
+        excluded_tax_count = 0
         for id in excluded_taxon_ids:
             self.excluded_id_dict[str(id)] = 1
+            excluded_tax_count += 1
         
         self.tax_id_2_mapping_units = {}
         self.mapping_unit_2_tax_id = {}
         self.filtered_tax_ids = {}
+        self.tax_id_2_filtered_contigs = {}
         for i in range(0, len(self.counts_per_unit)):
             current_id_label = self.counts_per_unit.index[i]
             matches = re.findall("kraken:taxid\\|(x?\\d+)\\|", current_id_label)
@@ -61,8 +241,17 @@ class MappingUnitData:
                 self.tax_id_2_mapping_units[taxon_id][current_id_label] = 1
                 self.mapping_unit_2_tax_id[current_id_label] = taxon_id
                 self.filtered_tax_ids[taxon_id] = 1
-        
+                
         self._filter_by_frequency(min_freq)
+   
+    
+    def __init__(self, read_file_prefix, min_freq, excluded_taxon_ids: list[int] = []) -> None:
+        self.reset()
+        print("Initializing MappingUnitData")
+        self.file_prefix = read_file_prefix
+        self.min_freq = min_freq
+        self.parse_metamaps_data(read_file_prefix, min_freq, excluded_taxon_ids)
+        self._init_tax_dict()
         
         
     def _filter_by_frequency(self, min_freq: float) -> dict:
@@ -86,7 +275,8 @@ class MappingUnitData:
         self.filtered_tax_ids = temp_filtered_tax_ids
     
     
-    def load_coverage(self) -> None:            
+    def load_coverage(self) -> None:        
+        print("Loading coverage data")    
         coverage_file = self.file_prefix + ".EM.contigCoverage"
         self.coverage_data = pd.read_csv(coverage_file, delimiter="\t")
         
@@ -105,6 +295,10 @@ class MappingUnitData:
             if id not in self.tax_id_2_name:
                 self.tax_id_2_name[id] = name
             if id in self.filtered_tax_ids:
+                # update mapping_unit_2_tax_id
+                if contig in self.mapping_unit_2_tax_id.keys():
+                    self.mapping_unit_2_tax_id[contig] = id
+                
                 # update tax_id_2_all_contigs
                 if (id not in self.tax_id_2_all_contigs):
                     self.tax_id_2_all_contigs[id] = {}
@@ -122,13 +316,13 @@ class MappingUnitData:
                 self.contig_2_coverages[contig].append(coverage)
         self.are_coverages_loaded = True
     
-    def filter_z_score_outliers(self, non_zero_count_threshold: float, preserve_outliers: bool=False) -> int:
+    def filter_sig_bin_outliers(self, non_zero_count_threshold: int=3, preserve_outliers: bool=False) -> int:
+        print("Filtering by significant bins")
         if self.are_coverages_loaded == False:
             print("Error: No coverage data loaded, please load coverage data before filtering by coverage")
             return
         
         o_count = 0
-        all_k = []
         temp_filtered_tax_ids = dict(self.filtered_tax_ids)
         self.tax_id_is_outlier = {}
         for current_tax_id in temp_filtered_tax_ids.keys():
@@ -148,14 +342,12 @@ class MappingUnitData:
             indices = []
             values = []
             i = 0
-            #indices.append(0)
+ 
             for val in all_coverages:
                 if val != 0:
                     indices.append(i)
                     values.append(val)
                 i += 1
-    
-            #values = stats.zscore(values)
        
             method = 'fd'
             density = True
@@ -165,27 +357,20 @@ class MappingUnitData:
             for i in range(0, len(hist)):
                 if hist_devs[i] > .025:
                     nonzero_count += 1
- 
-            # plt.title(current_tax_id + " significant bins: " + str(nonzero_count))
-            # plt.hist(indices, bins=600, density=density, weights=values)
-            # plt.show()
-
-            #print(current_tax_id, hist_devs)
                     
-            if (nonzero_count <= 3):
-             
-                if not preserve_outliers:
-                    self.tax_id_2_mapping_units.pop(current_tax_id, None)
-                    self.filtered_tax_ids.pop(current_tax_id, None)
+            if (nonzero_count <= non_zero_count_threshold):
                 self.tax_id_is_outlier[current_tax_id] = True
                 o_count += 1
-                
-        if not preserve_outliers:   
-            self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
-        all_k = sorted(all_k)
-        for k in all_k:
-            print(k)
-      
+
+        outliers = []
+        for id in self.filtered_tax_ids.keys():
+            if self.tax_id_is_outlier[id]:
+                outliers.append(id)
+
+        if not preserve_outliers:
+            print("Rebuilding database with", o_count, "outliers removed")
+            self.__init__(self.file_prefix, self.min_freq, outliers)
+            self.load_coverage() # todo: rebuild hashmaps faster than re-reading file(s)
         
         return o_count
     
@@ -226,6 +411,18 @@ class MappingUnitData:
             self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
             
         return o_count
+    
+    
+    def _init_tax_dict(self) -> None:
+        self.tax_dict = TaxDict()
+        for current_tax_id in self.filtered_tax_ids.keys():
+            if current_tax_id in self.excluded_id_dict:
+                continue
+            current_units = self.tax_id_2_mapping_units[current_tax_id]
+            for unit in current_units:
+                self.tax_dict.insert_id(current_tax_id, self.counts_per_unit[unit])
+                for i in range(0, self.counts_per_unit[unit]):
+                    self.reads.append((current_tax_id))
         
 
     def get_abundance_estimates(self) -> dict:

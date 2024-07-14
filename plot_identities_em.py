@@ -3,18 +3,20 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import time
 import argparse
-import MappingUnitData as mu
+import read_data as rd
+import create_coverage_outlier_table as ccot
 
 
 def plot_identities(file_prefix, min_plot_freq, min_tm: float=0.0, trim_proportion: float=.003, output: str="", excluded_tax_ids: list[str]=[], skip_coverage_filter: bool=False, verbose: bool=False) -> None:
     start_time = time.time()
     t0 = time.time()
-    
-    mu_data = mu.MappingUnitData(file_prefix, min_plot_freq, excluded_taxon_ids=excluded_tax_ids)
-    mu_data.load_coverage()
+    outliers = []
     if not skip_coverage_filter:
-        #mu_data.filter_coverage_tm_outliers(min_tm, trim_proportion, True)
-        mu_data.filter_z_score_outliers(50, True)
+        outliers = ccot.get_coverage_outllier_list(file_prefix, 0.0)
+    excluded_tax_ids.extend(outliers)
+    
+    mu_data = rd.ReadDataMM(file_prefix, min_plot_freq, excluded_taxon_ids=[])
+    mu_data.load_coverage()
     
     if verbose:
         print("Data read and filtering took", time.time() - t0, "seconds to run")
@@ -126,14 +128,14 @@ def plot_identities(file_prefix, min_plot_freq, min_tm: float=0.0, trim_proporti
         
         fig.tight_layout()
         
-        if not skip_coverage_filter:
-            if mu_data.tax_id_is_outlier[taxon_id]:
-                outliers_output.savefig()
-            else:
-                pdf_output.savefig()
-            all_output.savefig()
+        # if not skip_coverage_filter:
+        if taxon_id in excluded_tax_ids:
+            outliers_output.savefig()
         else:
             pdf_output.savefig()
+        all_output.savefig()
+        # else:
+        #     pdf_output.savefig()
             
         plt.close()
         

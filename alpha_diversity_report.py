@@ -2,7 +2,10 @@ import math
 import argparse
 import random
 from os import path
-import MappingUnitData as mu
+import sys
+
+import pandas as pd
+import read_data as rd
 import numpy as np
 import composition_stats as cs
 import numpy as np
@@ -13,9 +16,13 @@ from matplotlib.backends.backend_pdf import PdfPages
 import alphas as alphas
 import taxonomy as tax
 
-def generate_alpha_report(mu_data):
-    output = PdfPages(file_prefix + ".rarefaction.pdf")
-    abundance_estimates = mapping_units.get_abundance_estimates()
+def generate_alpha_report(file_prefix, read_data: rd.ReadData):
+    tax_dict = read_data.get_tax_dict()
+    reads = [read.get_assignment() for read in read_data.reads.values()]
+    
+    output = PdfPages(file_prefix + ".alpha_report.pdf")
+    
+    abundance_estimates = tax_dict["species"]
     estimate_list = list(abundance_estimates.values())  
     count_sum = sum(estimate_list)
     richness = len(estimate_list)
@@ -27,7 +34,7 @@ def generate_alpha_report(mu_data):
     
     evenness = shannons_alpha / math.log(richness)
     
-    tax_table = tax.get_lineage_counts(abundance_estimates, False)
+    tax_table = tax_dict
     fungi_count = 0
     
     if "kingdom" in tax_table:
@@ -36,16 +43,8 @@ def generate_alpha_report(mu_data):
             
     fungus_species_ratio = 0
     if fungi_count != 0:
-        fungus_species_ratio = (fungi_count / (richness-fungi_count))        
-    
-    #plt.figure(figsize=(12, 8))
-   
-    #plt.axis('off')
-    
-    # Fam level heatmap
-    
-    # Genus level heatmap
-    
+        fungus_species_ratio = (fungi_count / (count_sum - fungi_count))     
+     
     fig, plots = plt.subplots(1, 2)
     fig.set_figwidth(12)
     fig.set_figheight(8)
@@ -123,35 +122,40 @@ def generate_alpha_report(mu_data):
     plt.close()
     
     # Graph rarefaction curves
-    filtered_reads = []
-    for idx, level, unit, read_i, identitiy_score, length in mu_data.mapping_units.itertuples():
-        if unit in mu_data.mapping_unit_2_tax_id: # if unit was not filtered
-            id = mu_data.mapping_unit_2_tax_id[unit]
-            filtered_reads.append((unit, id, identitiy_score, length))
+    filtered_reads = reads.copy()
+    # for idx, level, unit, read_i, identitiy_score, length in mu_data.mapping_units.itertuples():
+    #     if unit in mu_data.mapping_unit_2_tax_id: # if unit was not filtered
+    #         id = mu_data.mapping_unit_2_tax_id[unit]
+    #         filtered_reads.append((unit, id, identitiy_score, length))
         
     reads_processed = 0
     read_per_species = {}
     read_per_otu = {}
+    read_per_genus = {}
     
     num_species_rare = []
-    num_otus_rare = []
+    num_genus_rare = []
     alphas_chao1_rare = []
     alphas_shannon_rare = []
     alphas_evenness_rare = []
     
     while len(filtered_reads) > 0:
         index = random.choice(range(len(filtered_reads)))
-        (unit, id, identitiy_score, length) = filtered_reads.pop(index)
+        (id) = filtered_reads.pop(index)
         reads_processed += 1
         
         # Compute new values
         if id not in read_per_species:
             read_per_species[id] = 0
-        if unit not in read_per_otu:
-            read_per_otu[unit] = 0
+            
+        if id not in read_per_genus:
+            read_per_genus[id] = 0
+        # if unit not in read_per_otu:
+        #     read_per_otu[unit] = 0
         
         read_per_species[id] += 1
-        read_per_otu[unit] += 1
+        read_per_genus[id] += 1
+        # read_per_otu[unit] += 1
 
         
         # compute current number of species
@@ -161,12 +165,19 @@ def generate_alpha_report(mu_data):
                 num_species += 1
         num_species_rare.append(num_species)
         
+        num_genus = 0
+        for id in read_per_genus.keys():
+            if read_per_genus[id] > 0:
+                num_genus += 1
+        num_genus_rare.append(num_genus)
+        
+        
         # compute current number of otus
-        num_otus = 0
-        for unit in read_per_otu.keys():
-            if read_per_otu[unit] > 0:
-                num_otus += 1
-        num_otus_rare.append(num_otus)
+        # num_otus = 0
+        # for unit in read_per_otu.keys():
+        #     if read_per_otu[unit] > 0:
+        #         num_otus += 1
+        # num_otus_rare.append(num_otus)
         
             
         estimate_list = list(read_per_species.values())  
@@ -190,14 +201,14 @@ def generate_alpha_report(mu_data):
     output.savefig()
     plt.close()
     
-    # num otus over reads
-    plt.figure(figsize=(12, 8))
-    plt.title("Number of OTUs")
-    plt.plot(range(1, reads_processed+1), num_otus_rare)
-    plt.xlabel("Reads Processed")
-    plt.ylabel("Number of OTUs")
-    output.savefig()
-    plt.close()
+    # # num otus over reads
+    # plt.figure(figsize=(12, 8))
+    # plt.title("Number of Units")
+    # plt.plot(range(1, reads_processed+1), num_otus_rare)
+    # plt.xlabel("Reads Processed")
+    # plt.ylabel("Number of Units")
+    # output.savefig()
+    # plt.close()
     
     # num species over reads
     plt.figure(figsize=(12, 8))
@@ -225,42 +236,79 @@ def generate_alpha_report(mu_data):
     plt.ylabel("Evenness")
     output.savefig()
     plt.close()
-    print("Rarefaction curves written to " + file_prefix + ".rarefaction.pdf")
+    print("Alpha report written to " + output._file.fh.name)
     output.close()
 
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Alpha Diversity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("classification_file_prefix", help="Prefix of the classification file")
+    #parser.add_argument("classification_file_prefix", help="Prefix of the classification file")
     parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
-    parser.add_argument("-m", "--max-avg-outlier-coverage", type=float, help="Maximum average outlier coverage", default=0.0)
-    parser.add_argument("-t", "--trim-proportion", type=float, help="Proportion of coverages to trim out", default=0.003)
+    #parser.add_argument("-M", "--mtsv", action="store_true", help="Classifcation file is MTSV output")
+    parser.add_argument("-mtsv", "--mtsv-file",  type=str, help="MTSV File")
+    parser.add_argument("-mtsvl", "--mtsv-lookup-file",  type=str, help="MTSV Lookup File")
+    parser.add_argument("-meta", "--meta-maps-file",  type=str, help="MetaMaps File")
     parser.add_argument("-I", "--ignore-ids", action="store_true", help="Ignore ids in the file .ignoreids")
     parser.add_argument("-S", "--skip-coverage-filter", action="store_true", help="Skip the coverage filtering step. Saves time if you already have a .ignoreids file. Will not generate an outlier pdf.")
+    parser.add_argument("-metaref", "--meta-maps-reference-file", type=str, help="MetaMaps file to filter MTSV with")
+    parser.add_argument("-mtsvref", "--mtsv-reference-file", type=str, help="MTSV file to filter MetaMaps reads with")
+
+
+    
     args = parser.parse_args()
     config = vars(args)
     min_freq = config["min_frequency"]
-    file_prefix = config["classification_file_prefix"]
-    max_outlier_coverage = config["max_avg_outlier_coverage"]
-    proportion = config["trim_proportion"]
+    #file_prefix = config["classification_file_prefix"]
+    # max_outlier_coverage = config["max_avg_outlier_coverage"]
+    # proportion = config["trim_proportion"]
     ignore_ids = config["ignore_ids"]
     skip_coverage_filter = config["skip_coverage_filter"]
-    
-    excluded_tax_ids = []
+    meta_file = config["meta_maps_file"]
+    mtsv_file = config["mtsv_file"]
+    mtsv_lookup_file = config["mtsv_lookup_file"]
+    meta_ref_file = config["meta_maps_reference_file"]
+    mtsv_ref_file = config["mtsv_reference_file"]
+    file_prefix = None
+       
+    id_blacklist_dict = {}
     if ignore_ids:
+        print("Ignoring ids from file .ignoreids")
         for id in open(".ignoreids", "r"):
             id = id.strip()
-            if id not in excluded_tax_ids:
-                excluded_tax_ids.append(id)
-    
-    mapping_units = mu.MappingUnitData(file_prefix, min_freq, excluded_tax_ids)
-    
-    if not skip_coverage_filter:
-        mapping_units.load_coverage()
-        mapping_units.filter_coverage_tm_outliers(max_outlier_coverage, proportion)
+            if id not in id_blacklist_dict:
+                id_blacklist_dict[id] = True
 
+    read_data = None
+    output_name = ""
+    
+    if meta_file:
+        read_data = rd.ReadData()
+        read_data.parse_metamaps_reads_2_taxon(meta_file)
+        output_name += path.basename(meta_file)
+        if mtsv_ref_file:
+            read_data.parse_mtsv_reads(mtsv_ref_file, mtsv_lookup_file, True)
+            read_data.prune_non_incidental_reads()
+        
+    if mtsv_file:
+        read_data = rd.ReadData()
+        read_data.parse_mtsv_reads(mtsv_file, mtsv_lookup_file)
+        output_name += path.basename(mtsv_file)
+        if meta_ref_file:
+            read_data.parse_metamaps_reads_2_taxon(meta_ref_file, True)
+            read_data.prune_non_incidental_reads()
+            read_data.resolve_lca()
+        
+    if not mtsv_file and not meta_file:
+        sys.exit("Error: Must provide either a metamaps or mtsv file")
+    
+    if mtsv_file and meta_file:
+        sys.exit("Error: Cannot provide both a metamaps and mtsv file. Choose one. Other file must be used as a reference file with -metaref or -mtsvref")
         
     
-    generate_alpha_report(mapping_units)
+    
+    # if not skip_coverage_filter:
+    #     mu_data.load_coverage()
+    #     mu_data.filter_sig_bin_outliers()
+    generate_alpha_report(output_name, read_data)
     
