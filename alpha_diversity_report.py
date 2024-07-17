@@ -4,6 +4,7 @@ import random
 from os import path
 import sys
 
+from matplotlib import colors
 import pandas as pd
 import read_data as rd
 import numpy as np
@@ -17,12 +18,20 @@ import alphas as alphas
 import taxonomy as tax
 
 def generate_alpha_report(file_prefix, read_data: rd.ReadData):
-    tax_dict = read_data.get_tax_dict()
+    tax_dict = read_data.get_tax_count_dict()
     reads = [read.get_assignment() for read in read_data.reads.values()]
     
     output = PdfPages(file_prefix + ".alpha_report.pdf")
     
-    abundance_estimates = tax_dict["species"]
+    abundance_estimates = tax_dict["genus"]
+    
+    read_ids = [read.get_assignment() for read in read_data.reads.values()]
+    read_ids_genus = []
+    for read_id in read_ids:
+        new_id = tax_dict.id_2_level_id(read_id, "genus")
+        read_ids_genus.append(new_id)
+    
+    
     estimate_list = list(abundance_estimates.values())  
     count_sum = sum(estimate_list)
     richness = len(estimate_list)
@@ -95,34 +104,77 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
     plots[2].axis('off')
     
     # phylum level heatmap
-    z_scores = scistats.zscore(list(tax_table["phylum"].values()))
-    data = []
-    for score in z_scores:
-        data.append([score])
-    data = np.array(data)
-    im = plots[1].imshow(data, aspect='auto', cmap='hot')
-    plots[1].set_title("Phylum Z-Scores")
-    plots[1].get_xaxis().set_visible(False)
-    plots[1].set_yticks(np.arange(len(list(tax_table["phylum"].keys()))), labels=list(tax_table["phylum"].keys()))
-    plots[1].figure.colorbar(im)
+    # z_scores = scistats.zscore(list(tax_table["phylum"].values()))
+    # data = []
+    # for score in z_scores:
+    #     data.append([score])
+    # data = np.array(data)
+    # im = plots[1].imshow(data, aspect='auto', cmap='hot')
+    # plots[1].set_title("Phylum Z-Scores")
+    # plots[1].get_xaxis().set_visible(False)
+    # plots[1].set_yticks(np.arange(len(list(tax_table["phylum"].keys()))), labels=list(tax_table["phylum"].keys()))
+    # plots[1].figure.colorbar(im)
     
-    # superkingdom level heatmap
-    z_scores = scistats.zscore(list(tax_table["superkingdom"].values()))
-    data = []
-    for score in z_scores:
-        data.append([score])
-    data = np.array(data)
-    im = plots[3].imshow(data, aspect='auto', cmap='hot')
-    plots[3].set_title("Superkingdom Z-Scores")
-    plots[3].get_xaxis().set_visible(False)
-    plots[3].set_yticks(np.arange(len(list(tax_table["superkingdom"].keys()))), labels=list(tax_table["superkingdom"].keys()))
-    plots[3].figure.colorbar(im)
+    # # superkingdom level heatmap
+    # z_scores = scistats.zscore(list(tax_table["superkingdom"].values()))
+    # data = []
+    # for score in z_scores:
+    #     data.append([score])
+    # data = np.array(data)
+    # im = plots[3].imshow(data, aspect='auto', cmap='hot')
+    # plots[3].set_title("Superkingdom Z-Scores")
+    # plots[3].get_xaxis().set_visible(False)
+    # plots[3].set_yticks(np.arange(len(list(tax_table["superkingdom"].keys()))), labels=list(tax_table["superkingdom"].keys()))
+    # plots[3].figure.colorbar(im)
     
+    # output.savefig()
+    # plt.close()
+    
+    fig, plots = plt.subplots(1, 1)
+    fig.set_figwidth(12)
+    fig.set_figheight(8)
+    #plots.axis('off')
+    
+    # genus level heatmap
+    z_scores = scistats.zscore(list(tax_table["genus"].values()))
+    labels = list(tax_table["genus"].keys())
+    data_dict = {}
+    for idx, label in enumerate(labels):
+        data_dict[label] = z_scores[idx]
+        
+    # sort dict
+    data_dict = dict(sorted(data_dict.items(), key=lambda item: item[1], reverse=True))
+    data = []
+    data_labels = []
+    
+    for score in data_dict.values():
+        data.append([score])
+        data_labels.append(list(data_dict.keys())[list(data_dict.values()).index(score)])
+
+ 
+    top_ten_genus = data[:10]
+    top_ten_genus_labels = data_labels[:10]
+    top_ten_counts = []
+    for label in top_ten_genus_labels:
+        top_ten_counts.append(tax_table["genus"][label])
+
+    for idx, label in enumerate(top_ten_genus_labels):
+        top_ten_genus_labels[idx] += " - "
+        top_ten_genus_labels[idx] += str(top_ten_counts[idx])
+        top_ten_genus_labels[idx] += " reads"
+
+    data = np.array(top_ten_genus)
+    im = plots.imshow(top_ten_genus, aspect='auto', cmap='hot', norm=colors.Normalize(vmin=min(z_scores), vmax=max(z_scores)))
+    plots.set_title("Genus Z-Scores top 10")
+    plots.get_xaxis().set_visible(False)
+    plots.set_yticks(np.arange(len(top_ten_genus_labels)), labels=top_ten_genus_labels)
+    plots.figure.colorbar(im)
+    plt.tight_layout()
     output.savefig()
     plt.close()
     
     # Graph rarefaction curves
-    filtered_reads = reads.copy()
+    filtered_reads = read_ids_genus.copy()
     # for idx, level, unit, read_i, identitiy_score, length in mu_data.mapping_units.itertuples():
     #     if unit in mu_data.mapping_unit_2_tax_id: # if unit was not filtered
     #         id = mu_data.mapping_unit_2_tax_id[unit]
@@ -194,7 +246,7 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
         
     # num species over reads
     plt.figure(figsize=(12, 8))
-    plt.title("Number of Species")
+    plt.title("Genus Count")
     plt.plot(range(1, reads_processed+1), num_species_rare)
     plt.xlabel("Reads Processed")
     plt.ylabel("Number of Species")
@@ -289,6 +341,7 @@ if __name__ == "__main__":
         if mtsv_ref_file:
             read_data.parse_mtsv_reads(mtsv_ref_file, mtsv_lookup_file, True)
             read_data.prune_non_incidental_reads()
+            read_data.prune_by_level("genus")
         
     if mtsv_file:
         read_data = rd.ReadData()
@@ -298,6 +351,7 @@ if __name__ == "__main__":
             read_data.parse_metamaps_reads_2_taxon(meta_ref_file, True)
             read_data.prune_non_incidental_reads()
             read_data.resolve_lca()
+            read_data.prune_by_level("genus")
         
     if not mtsv_file and not meta_file:
         sys.exit("Error: Must provide either a metamaps or mtsv file")

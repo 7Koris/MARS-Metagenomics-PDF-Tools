@@ -22,17 +22,25 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     all_fungi_ratios = []
     all_fungi_counts = []
     all_phylum_scores = []
+    all_genus_scores = []
+    all_read_sets = []
     all_abundance_estimates = {}
     for idx, read_data in enumerate(all_read_data):
         current_name = all_read_data_names[idx]
+        tax_count_dict = read_data.get_tax_count_dict()
         tax_dict = read_data.get_tax_dict()
         
-        abundance_estimates = tax_dict["species"]
-        reads = [read.get_assignment() for read in read_data.reads.values()]
+        species_level_estimates = tax_count_dict["genus"]
+        read_ids = [read.get_assignment() for read in read_data.reads.values()]
+        read_ids_genus = []
+        for read_id in read_ids:
+            new_id = tax_dict.id_2_level_id(read_id, "genus")
+            read_ids_genus.append(new_id)
+        all_read_sets.append(read_ids_genus)
     
 
-        all_abundance_estimates[current_name] = abundance_estimates
-        estimate_list = list(abundance_estimates.values())  
+        all_abundance_estimates[current_name] = species_level_estimates
+        estimate_list = list(species_level_estimates.values())  
         count_sum = sum(estimate_list)
         richness = len(estimate_list)
         chao1 = alphas.chao1(estimate_list)
@@ -43,7 +51,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
         
         evenness = shannons_alpha / math.log(richness)
         
-        tax_table = tax_dict
+        tax_table = tax_count_dict
         fungi_count = 0
         
         if "kingdom" in tax_table:
@@ -55,7 +63,15 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
             fungus_species_ratio = (fungi_count / (count_sum - fungi_count))  
             
         all_fungi_ratios.append(fungus_species_ratio)
-        all_fungi_counts.append(fungi_count)  
+        all_fungi_counts.append(fungi_count)
+        
+        # genus level z-scores
+        z_scores = scistats.zscore(list(tax_table["genus"].values()))
+        labels = list(tax_table["genus"].keys())
+        z_dict = {}
+        for i in range(len(labels)):
+            z_dict[labels[i]] = z_scores[i]
+        all_genus_scores.append(z_dict)
             
         # phylum level z-scores
         z_scores = scistats.zscore(list(tax_table["phylum"].values()))
@@ -71,27 +87,41 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
         for phylum in phylum_scores.keys():
             if phylum not in all_phylums:
                 all_phylums[phylum] = 1
+                
+    #collect all genus
+    all_genus = {}
+    for genus_scores in all_genus_scores:
+        for genus in genus_scores.keys():
+            if genus not in all_genus:
+                all_genus[genus] = 1
+    
 
     # Insert 0 values for missing entries in the z-scores
     for phylum_scores in all_phylum_scores:
         for phylum in all_phylums.keys():
             if phylum not in phylum_scores:
                 phylum_scores[phylum] = 0
+                
+    # Insert 0 values for missing entries in the z-scores
+    for genus_scores in all_genus_scores:
+        for genus in all_genus.keys():
+            if genus not in genus_scores:
+                genus_scores[genus] = 0
     
     # Collect all ids in the abundance estimates
     all_ids = {}
     for prefix in all_abundance_estimates:
-        abundance_estimates = all_abundance_estimates[prefix]
-        for id in abundance_estimates.keys():
+        species_level_estimates = all_abundance_estimates[prefix]
+        for id in species_level_estimates.keys():
             if id not in all_ids:
                 all_ids[id] = 1
 
     # Insert 0 values for missing entries in the abundance estimates
     for prefix in all_abundance_estimates:
-        abundance_estimates = all_abundance_estimates[prefix]
+        species_level_estimates = all_abundance_estimates[prefix]
         for id in all_ids.keys():
-            if id not in abundance_estimates:
-                abundance_estimates[id] = 0
+            if id not in species_level_estimates:
+                species_level_estimates[id] = 0
                 
     all_unit_sets = all_read_data
     all_unit_names = all_read_data_names
@@ -100,6 +130,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     jaccard_matrix = np.zeros((len(all_unit_sets), len(all_unit_sets)))
     city_block_matrix = np.zeros((len(all_unit_sets), len(all_unit_sets)))
     aitchison_matrix = np.zeros((len(all_unit_sets), len(all_unit_sets)))
+    
     for current_name in all_unit_names:
         for other_name in all_unit_names:
             if current_name == other_name:
@@ -127,16 +158,16 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     
     # Rarefaction curves
     curves_dict = {}
-    for idx, current_read_data in enumerate(all_read_data):
+    for idx, read_data in enumerate(all_read_data):
         current_name = all_read_data_names[idx]
         
-        filtered_reads = [read.get_assignment() for read in current_read_data.reads.values()]
+        filtered_reads = all_read_sets[idx]
             
         reads_processed = 0
-        read_per_species = {}
+        read_per_genus = {}
         read_per_otu = {}
         
-        num_species_rare = []
+        num_genus_rare = []
         num_otus_rare = []
         alphas_chao1_rare = []
         alphas_shannon_rare = []
@@ -148,21 +179,21 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
             reads_processed += 1
             
             # Compute new values
-            if id not in read_per_species:
-                read_per_species[id] = 0
+            if id not in read_per_genus:
+                read_per_genus[id] = 0
             # if unit not in read_per_otu:
             #     read_per_otu[unit] = 0
             
-            read_per_species[id] += 1
+            read_per_genus[id] += 1
             #read_per_otu[unit] += 1
 
             
             # compute current number of species
-            num_species = 0
-            for id in read_per_species.keys():
-                if read_per_species[id] > 0:
-                    num_species += 1
-            num_species_rare.append(num_species)
+            num_genus = 0
+            for id in read_per_genus.keys():
+                if read_per_genus[id] > 0:
+                    num_genus += 1
+            num_genus_rare.append(num_genus)
             
             # compute current number of otus
             # num_otus = 0
@@ -172,19 +203,19 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
             # num_otus_rare.append(num_otus)
             
                 
-            estimate_list = list(read_per_species.values())  
+            estimate_list = list(read_per_genus.values())  
             alphas_chao1_rare.append(alphas.chao1(estimate_list))
             if len(estimate_list) == 1:
                 sa = 0
             else:
                 sa = alphas.shannons_alpha(estimate_list)
             alphas_shannon_rare.append(sa)
-            if math.log(num_species) == 0:
+            if math.log(num_genus) == 0:
                 alphas_evenness_rare.append(0)
             else:
-                alphas_evenness_rare.append( sa / math.log(num_species))
+                alphas_evenness_rare.append( sa / math.log(num_genus))
         curves_dict[current_name] = {}
-        curves_dict[current_name]["num_species"] = num_species_rare
+        curves_dict[current_name]["num_species"] = num_genus_rare
         curves_dict[current_name]["num_otus"] = num_otus_rare
         curves_dict[current_name]["chao1"] = alphas_chao1_rare
         curves_dict[current_name]["shannon"] = alphas_shannon_rare
@@ -194,7 +225,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     fig, plots = plt.subplots(1, 1)
     fig.set_figwidth(12)
     fig.set_figheight(8)
-    im = plots.imshow(data, aspect='auto', cmap='twilight_shifted')
+    im = plots.imshow(data, aspect='auto', cmap='hot' , norm=colors.Normalize(vmin=min(z_scores), vmax=max(z_scores)))
     plots.set_title("Phylum Z-Scores")
     plots.set_xticks(np.arange(len(x_labels)), labels=x_labels, rotation=45, size='small')
     plots.set_yticks(np.arange(len(y_labels)), labels=y_labels) 
@@ -278,51 +309,13 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     # output.savefig()
     plt.close()
     
-    # PCoA
-    # https://medium.com/@conniezhou678/applied-machine-learning-part-12-principal-coordinate-analysis-pcoa-in-python-5acc2a3afe2d
-    # fig, plots = plt.subplots(1, 1)
-    # fig.set_figwidth(12)
-    # fig.set_figheight(8)
-    # mds_matrix = MDS(n_components=2, dissimilarity='precomputed').fit_transform(bc_matrix)
-    
-    
-    
-    # #plots.scatter(mds_matrix[:, 0], mds_matrix[:, 1])
-    # for i, txt in enumerate(all_unit_names):
-    #     plots.annotate(txt, (mds_matrix[i, 0], mds_matrix[i, 1]))
-    # plots.set_xlabel('PC1')
-    # plots.set_ylabel('PC2')
-    # plots.set_title('PCoA')
-    # plt.tight_layout()
-    
-    # output.savefig()
-
-    
-    # PCA
-    # fig, plots = plt.subplots(1, 1)
-    # fig.set_figwidth(12)
-    # fig.set_figheight(8)
-    # mds_matrix = MDS(n_components=2, dissimilarity='precomputed').fit_transform(bc_matrix)
-    # plots.scatter(mds_matrix[:, 0], mds_matrix[:, 1])
-    # for i, txt in enumerate(all_unit_names):
-    #     plots.annotate(txt, (mds_matrix[i, 0], mds_matrix[i, 1]))
-    # plots.set_xlabel('PC1')
-    # plots.set_ylabel('PC2')
-    # plots.set_title('PCA')
-    # plt.tight_layout()
-    
-    # output.savefig()
-    # output.close()
-    
-    # return 
-    
     # Plot rarefaction curves    
     fig, plots = plt.subplots(1, 1)
     fig.set_figwidth(12)
     fig.set_figheight(8)
     for name in curves_dict.keys():
         plots.plot(curves_dict[name]["num_species"], label=name)
-    plots.set_title("Number of Species")
+    plots.set_title("Genus Count")
     #plots.xlabel("Reads Processed")
     plt.legend(loc='upper left')
     output.savefig()
@@ -361,55 +354,9 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     output.savefig()
     plt.close()
     
-    output.close()
-        
-  
-        
-    # fig, plots = plt.subplots(1, 4)
-    # fig.set_figwidth(12)
-    # fig.set_figheight(8)
-    # plots[0].axis('off')
-    # plots[2].axis('off')
-    
-    # # phylum level heatmap
-    # z_scores = scistats.zscore(list(tax_table["phylum"].values()))
-    # data = []
-    # for score in z_scores:
-    #     data.append([score])
-    # data = np.array(data)
-    # im = plots[1].imshow(data, aspect='auto', cmap='hot')
-    # plots[1].set_title("Phylum Z-Scores")
-    # plots[1].get_xaxis().set_visible(False)
-    # plots[1].set_yticks(np.arange(len(list(tax_table["phylum"].keys()))), labels=list(tax_table["phylum"].keys()))
-    # plots[1].figure.colorbar(im)
-    
-    # # superkingdom level heatmap
-    # z_scores = scistats.zscore(list(tax_table["superkingdom"].values()))
-    # data = []
-    # for score in z_scores:
-    #     data.append([score])
-    # data = np.array(data)
-    # im = plots[3].imshow(data, aspect='auto', cmap='hot')
-    # plots[3].set_title("Superkingdom Z-Scores")
-    # plots[3].get_xaxis().set_visible(False)
-    # plots[3].set_yticks(np.arange(len(list(tax_table["superkingdom"].keys()))), labels=list(tax_table["superkingdom"].keys()))
-    # plots[3].figure.colorbar(im)
-    
-    # output.savefig()
-    # plt.close()
-        
-       
-    
-    # # num species over reads
-    # plt.figure(figsize=(12, 8))
-    # plt.title("Evenness")
-    # #plt.plot(range(1, reads_processed+1), alphas_evenness_rare, label="Number of Species")
-    # plt.xlabel("Reads Processed")
-    # plt.ylabel("Evenness")
-    # output.savefig()
-    # plt.close()
-    # print("Rarefaction curves written to " + file_prefix + ".rarefaction.pdf")
-    # output.close()
+    print("Output written to", output._file.fh.name)
+    output.close()      
+   
 
 
 
@@ -476,6 +423,7 @@ if __name__ == "__main__":
             if len(all_mtsv_refs) > 0:
                 read_data.parse_mtsv_reads(all_mtsv_refs[idx], all_mtsv_ref_lookup_files[idx], True)
                 read_data.prune_non_incidental_reads()
+            read_data.prune_by_level("genus")
             
             all_read_data.append(read_data)
             all_read_data_names.append(path.basename(file))
@@ -491,15 +439,13 @@ if __name__ == "__main__":
                         
             if len(all_meta_refs) > 0:
                 read_data.parse_metamaps_reads_2_taxon(all_meta_refs[0], True)
-                print("non incidental reads", len(read_data._incidence_dict))
                 read_data.prune_non_incidental_reads()
             read_data.resolve_lca()
+            read_data.prune_by_level("genus")
             
             all_read_data.append(read_data)
             all_read_data_names.append(path.basename(file))
         
-                
-  
 
     generate_beta_report(output_name, all_read_data_names, all_read_data)
     

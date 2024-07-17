@@ -36,9 +36,13 @@ class ReadData:
         self._tax_dict = TaxDict(rebuild_database)
         self._incidence_dict = dict()
         self.reads = dict()
-        
+    
     
     def get_tax_dict(self) -> TaxDict:
+        return self._tax_dict
+        
+    
+    def get_tax_count_dict(self) -> TaxDict:
         self._tax_dict = TaxDict(False)
         for read in self.reads.values():
             if isinstance(read.assigned_taxon_id, list):
@@ -54,6 +58,7 @@ class ReadData:
             sys.exit(1)
         self.reads[new_read.hash] = new_read    
     
+    
     def prune_non_incidental_reads(self) -> int:
         """
         Remove reads not in incidence dictionary
@@ -65,7 +70,25 @@ class ReadData:
             if read not in self._incidence_dict:
                 self.reads.pop(read)
                 reads_deleted += 1
-        print("Pruned %d reads" % reads_deleted + " of %d" % start_read_count)
+        print("Pruned %d reads" % reads_deleted + " of %d" % start_read_count, "by incidence")
+        return reads_deleted
+    
+    
+    def prune_by_level(self, level: str) -> int:
+        read_keys = list(self.reads.keys())
+        reads_deleted = 0
+        start_read_count = len(read_keys)
+        for read in read_keys:
+            levels = self._tax_dict.ncbi.get_lineage(self.reads[read].assigned_taxon_id)
+            level_dict = {}
+            for idx, id in enumerate(levels):
+                levels[idx] = self._tax_dict.id_2_rank(id)
+                level_dict[levels[idx]] = 1
+                
+            if level not in level_dict:
+                self.reads.pop(read)
+                reads_deleted += 1
+        print("Pruned %d reads" % reads_deleted + " of %d" % start_read_count, "at level", level)
         return reads_deleted
     
     
