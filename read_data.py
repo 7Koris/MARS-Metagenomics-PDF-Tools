@@ -1,3 +1,4 @@
+import random
 import sys
 import re
 import numpy as np
@@ -28,6 +29,8 @@ class ReadData:
     _tax_dict: TaxDict # Dictionary of taxon IDs and read counts assigned for each ID
     _incidence_dict: dict = {} # Dictionary of taxon IDs based on being seen in reads <taxonID, bool>
     reads = dict() # Dictionary of reads given hash
+    processed_read_count = 0 # Total number of reads processed including those discarded/pruned
+    
     
     
     # TODO: Implement BLACKLIST
@@ -36,6 +39,13 @@ class ReadData:
         self._tax_dict = TaxDict(rebuild_database)
         self._incidence_dict = dict()
         self.reads = dict()
+
+    
+    def load_data(self, data: tuple) -> None:
+        reads = data[0]
+        processed_read_count = data[1]
+        self.reads = reads
+        self.processed_read_count = processed_read_count
     
     
     def get_tax_dict(self) -> TaxDict:
@@ -50,9 +60,17 @@ class ReadData:
                 continue
             self._tax_dict.insert_id(read.assigned_taxon_id, 1)
         return self._tax_dict
-    
+     
         
-    def _insert_read(self, new_read: Read) -> None:
+    def insert_read(self, new_read: Read) -> None:
+        self.processed_read_count += 1
+        id = new_read.assigned_taxon_id
+        if isinstance(id, list):
+            pass
+        elif id in self._id_blacklist_dict: # Skip blacklisted ids
+            #print("Skipping blacklisted ID %s" % id)
+            return 
+        
         if new_read.hash in self.reads:
             print("Error: Read %s already parsed" % new_read.hash)
             sys.exit(1)
@@ -60,6 +78,8 @@ class ReadData:
     
     
     def prune_non_incidental_reads(self) -> int:
+        if len(self.reads) == 0:
+            return
         """
         Remove reads not in incidence dictionary
         """
@@ -75,6 +95,8 @@ class ReadData:
     
     
     def prune_by_level(self, level: str) -> int:
+        if len(self.reads) == 0:
+            return
         read_keys = list(self.reads.keys())
         reads_deleted = 0
         start_read_count = len(read_keys)
@@ -92,6 +114,50 @@ class ReadData:
         return reads_deleted
     
     
+    def prune_reads_not_in_rank(self, rank_level: str, rank_name: str) -> int:
+        if len(self.reads) == 0:
+            return
+        read_keys = list(self.reads.keys())
+        reads_deleted = 0
+        start_read_count = len(read_keys)
+        for read in read_keys:
+            assigned_id = self.reads[read].assigned_taxon_id
+            lineage = self._tax_dict.ncbi.get_lineage(assigned_id)
+            ranks = self._tax_dict.ncbi.get_rank(lineage)
+            rank_names = []
+            for id in lineage:
+                name = self._tax_dict.id_2_name(id)
+                rank_names.append(name)
+                
+            if rank_name in rank_names:
+                #print(rank_names)
+                pass
+            else:
+                self.reads.pop(read)
+                reads_deleted += 1
+                continue
+                
+            # if rank_name not in rank_names:
+            #     self.reads.pop(read)
+            #     reads_deleted += 1
+            #     break
+            
+            
+            for idx, id in enumerate(lineage):
+                current_rank_name = self._tax_dict.id_2_rank(id)
+                
+                if current_rank_name == rank_level:
+                    current_name = self._tax_dict.id_2_name(id)
+                    if current_name == rank_name:
+                        break
+                    else:
+                        self.reads.pop(read)
+                        reads_deleted += 1
+                        break
+        print("Pruned %d reads" % reads_deleted + " of %d" % start_read_count, "not in rank", rank_name)
+        #print(self.get_tax_count_dict())
+    
+    
     def resolve_lca(self) -> None:
         for read in self.reads:
             current_read = self.reads[read]
@@ -101,6 +167,22 @@ class ReadData:
                     print("Error: No LCA found for read %s" % read)
                     sys.exit(1)
                 current_read.assigned_taxon_id = lca
+                
+                
+    def rarefy(self, min_reads: int, seed: int = 0) -> None:
+        print("Rarefying reads down to %d" % min_reads, "with seed %d" % seed)
+        keys = list(self.reads.keys())
+        
+        random.seed(seed)
+        random.shuffle(keys)
+        
+        if len(keys) <= min_reads:
+            return
+        
+        while len(keys) > min_reads:
+            random_key = random.choice(keys)
+            self.reads.pop(random_key)
+            keys.remove(random_key)
 
         
     def parse_mtsv_reads(self, read_file_name: str, lookup_file_name: str, incidence_only: bool = False) -> None:
@@ -156,10 +238,10 @@ class ReadData:
 
             if len(min_ids) == 1:
               new_read = Read(hash, min_ids[0])
-              self._insert_read(new_read)
+              self.insert_read(new_read)
             elif len(min_ids) > 1:
                 new_read = Read(hash, min_ids)
-                self._insert_read(new_read)
+                self.insert_read(new_read)
             else:
                 sys.exit("Error: No taxon ID found for read %s" % read_id, "Is there a formatting error?")
 
@@ -172,10 +254,12 @@ class ReadData:
         opened_file.close()
         for line in lines:
             (hash, id) = line.split("\t")
+            
             id = id.strip()
             hash = hash.strip()
             
             if id == "0": # Unassigned
+                self.processed_read_count += 1
                 continue
             
             if incidence_only:
@@ -184,7 +268,7 @@ class ReadData:
             
             new_read = Read(hash, id)
             
-            self._insert_read(new_read)
+            self.insert_read(new_read)
             
 
 # MetaMaps read data exclusively for plotting
@@ -421,8 +505,6 @@ class ReadDataMM:
                 
             tm = stats.trim_mean(all_coverages, proportion)
             
-            if current_tax_id == '549298':
-                print(tm)
             if (tm <= max_outlier_coverage):
                 if not preserve_outliers:
                     self.tax_id_2_mapping_units.pop(current_tax_id, None)

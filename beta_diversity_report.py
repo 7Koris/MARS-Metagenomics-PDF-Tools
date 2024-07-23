@@ -1,7 +1,9 @@
 import math
 import argparse
+import pickle
 import random
-from os import path
+from os import listdir, path
+import sys
 
 from matplotlib import colors
 import read_data as rd
@@ -15,6 +17,8 @@ from matplotlib.backends.backend_pdf import PdfPages
 import alphas as alphas
 import taxonomy as tax
 import betas as betas
+
+seed = 0
 
 def generate_beta_report(output_name, all_read_data_names, all_read_data):
     output = PdfPages(output_name + ".beta_report.pdf")
@@ -172,6 +176,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
         alphas_chao1_rare = []
         alphas_shannon_rare = []
         alphas_evenness_rare = []
+        random.seed(0)
         
         while len(filtered_reads) > 0:
             index = random.choice(range(len(filtered_reads)))
@@ -362,90 +367,37 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Beta Diversity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
-    parser.add_argument("-I", "--ignore-ids", action="store_true", help="Ignore ids in the file .ignoreids")
-    #parser.add_argument("-S", "--skip-coverage-filter", action="store_true", help="Skip the coverage filtering step. Saves time if you already have a .ignoreids file. Will not generate an outlier pdf.")
-    parser.add_argument("-mtsv", "--mtsv-files", nargs='+', help="MTSV files")
-    parser.add_argument("-mtsvl", "--mtsv-lookup-files", nargs='+', help="MTSV lookup files (IN ORDER OF MTSV FILES)")
-    parser.add_argument("-meta", "--meta-maps-files", nargs='+', help="MetaMaps files")
-    
-    parser.add_argument("-metaref", "--meta-maps-reference-files", nargs='+', help="MetaMaps files to filter MTSV with (IN ORDER OF MTSV FILES)")
-    parser.add_argument("-mtsvref", "--mtsv-reference-files", nargs='+', help="MTSV files to filter MetaMaps with (IN ORDER OF MTSV FILES)")
-    parser.add_argument("-mtsvrefl", "--mtsvref-lookup-files", nargs='+', help="Lookup files for MTSV refs (IN ORDER OF MTSV FILES)")
-
-    
+    parser.add_argument("-f", "--files", nargs='+', help="Files to compare")
+    parser.add_argument("-s", "--seed", type=str, help="Seed for random number generator", default=0)
+ 
     args = parser.parse_args()
     config = vars(args)
-    min_freq = config["min_frequency"]
-    mtsv_files = config["mtsv_files"]
-    meta_files = config["meta_maps_files"]
-    meta_ref_files = config["meta_maps_reference_files"]
-    mtsv_ref_files = config["mtsv_reference_files"]
-    mtsv_lookup_files = config["mtsv_lookup_files"]
-    mtsv_ref_lookup_files = config["mtsvref_lookup_files"]
-    ignore_ids = config["ignore_ids"]
-    #skip_coverage_filter = config["skip_coverage_filter"]
+    files = config["files"]
+    seed = config["seed"]
     
-    output_name = ""
+    # if no files given
+    if files == None:
+        files = []
+        dir_files = listdir("reads")
+        for file in dir_files:
+            if path.splitext(file)[1] != ".p":
+                continue
+            files.append(path.splitext(file)[0] + ".p")
+       
+        if file is None:
+            sys.exit("No files found in reads ~/reads directory.") 
     
+    output_prefix = ""
     all_read_data = []
-    
-    all_meta_refs = []
-    all_mtsv_refs = []
-    all_mtsv_ref_lookup_files = []
-    all_lookup_files = []
     all_read_data_names = []
     
-    if not meta_ref_files is None:
-        for file in meta_ref_files:
-            all_meta_refs.append(file)
-    
-    if not mtsv_ref_files is None:
-        for file in mtsv_ref_files:
-            all_mtsv_refs.append(file)
+    for file in files:
+        current_name = path.splitext(file)[0]
+        output_prefix += current_name + "_"
+        read_data = rd.ReadData()
+        read_data.load_data(pickle.load(open("reads/" + file, "rb")))
+        all_read_data.append(read_data)
+        all_read_data_names.append(current_name)
 
-    if not mtsv_lookup_files is None:
-        for file in mtsv_lookup_files:
-            all_lookup_files.append(file)
-
-    if not mtsv_ref_lookup_files is None:
-        for file in mtsv_ref_lookup_files:
-            all_mtsv_ref_lookup_files.append(file)
-    
-    if not meta_files is None:
-        for idx, file in enumerate(meta_files):
-            if len(output_name) > 0:
-                output_name += "_"
-            output_name += path.basename(file)
-            read_data = rd.ReadData()
-            read_data.parse_metamaps_reads_2_taxon(file)
-            
-            if len(all_mtsv_refs) > 0:
-                read_data.parse_mtsv_reads(all_mtsv_refs[idx], all_mtsv_ref_lookup_files[idx], True)
-                read_data.prune_non_incidental_reads()
-            read_data.prune_by_level("genus")
-            
-            all_read_data.append(read_data)
-            all_read_data_names.append(path.basename(file))
-    
-    if not mtsv_files is None:
-        for idx, file in enumerate(mtsv_files):
-            if len(output_name) > 0:
-                output_name += "_"
-            output_name += path.basename(file)
-            read_data = rd.ReadData()
-            read_data.parse_mtsv_reads(file, all_lookup_files[idx])
-            
-                        
-            if len(all_meta_refs) > 0:
-                read_data.parse_metamaps_reads_2_taxon(all_meta_refs[0], True)
-                read_data.prune_non_incidental_reads()
-            read_data.resolve_lca()
-            read_data.prune_by_level("genus")
-            
-            all_read_data.append(read_data)
-            all_read_data_names.append(path.basename(file))
-        
-
-    generate_beta_report(output_name, all_read_data_names, all_read_data)
+    generate_beta_report( output_prefix, all_read_data_names, all_read_data)
     

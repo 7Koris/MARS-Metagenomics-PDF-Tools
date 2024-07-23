@@ -1,23 +1,21 @@
 import math
 import argparse
 import random
-from os import path
+from os import path, listdir
 import sys
-
-from matplotlib import colors
 import pandas as pd
 import read_data as rd
-import numpy as np
-import composition_stats as cs
 import numpy as np
 from scipy import stats as scistats
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-# import rpy2.robjects as robjects
 import alphas as alphas
-import taxonomy as tax
+import pickle
+
+seed = 0
 
 def generate_alpha_report(file_prefix, read_data: rd.ReadData):
+    pd.options.mode.chained_assignment = None 
     tax_dict = read_data.get_tax_count_dict()
     reads = [read.get_assignment() for read in read_data.reads.values()]
     
@@ -53,8 +51,41 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
     fungus_species_ratio = 0
     if fungi_count != 0:
         fungus_species_ratio = (fungi_count / (count_sum - fungi_count))     
-     
+        
+    #plot = plt.figure(figsize=(12, 8))
     fig, plots = plt.subplots(1, 2)
+    fig.set_figwidth(12)
+    fig.set_figheight(8)
+    species_dist = list(tax_table["species"].values())
+    species_dist = sorted(species_dist, reverse=True)
+    read_sum = sum(species_dist)
+   # bar = pd.DataFrame(species_dist, index=list(tax_table["species"].keys())).T.plot.bar(legend=False, figsize=(12, 8), color='blue')
+    #plots[1].plot(species_dist, color='blue')
+    # plot a bar plot
+    plots[0].axis('off')
+    plots[1].bar(range(len(species_dist)), species_dist, color='blue')
+    plots[1].set_title("Species-Level Read Distribution of %i reads" %(round(read_sum, 0)))
+    plots[1].set_yscale('log')
+    plt.axes().axis('off')
+    h_offset = 0
+    v_offset = 0.05
+    plt.text(h_offset, 1 - v_offset, "Alpha Summary: %s" %(str(path.basename(file_prefix))))
+    plt.text(h_offset, 0.95 - v_offset, "     Richness: %s" %(round(richness, 3)))
+    plt.text(h_offset, 0.9 - v_offset, "     Chao1: %s" %(round(chao1, 3)))
+    plt.text(h_offset, 0.85 - v_offset, "     Shannon's Alpha: %s" %(round(shannons_alpha, 3)))
+    plt.text(h_offset, 0.8 - v_offset, "     Berger-Parker: %s" %(round(bp, 3)))
+    plt.text(h_offset, 0.75 - v_offset, "     Simpson's Alpha: %s" %(round(simp, 3)))
+    plt.text(h_offset, 0.7 - v_offset, "     Inverse Simpson's Alpha: %s" %(round(in_simp, 3)))
+    plt.text(h_offset, 0.65 - v_offset, "     Evenness: %s" %(round(evenness, 3)))
+    plt.text(h_offset, 0.6 - v_offset, "     Fungus-Species ratio: %s" %(round(fungus_species_ratio, 3)))
+    plt.text(h_offset, 0.55 - v_offset, "     Fungi read count: %s" %(round(fungi_count, 3)))
+    plt.text(h_offset, 0.5 - v_offset, "     Total filtered reads: %s" %(round(count_sum, 3)))
+    plt.text(h_offset, 0.45 - v_offset, "     Total unfiltered reads: %s" %(round(read_data.processed_read_count, 3)))
+    plt.tight_layout()
+    output.savefig()
+    plt.close()
+     
+    fig, plots = plt.subplots(1, 1)
     fig.set_figwidth(12)
     fig.set_figheight(8)
     
@@ -68,8 +99,7 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
         for sub_key in rank_freq_dict.keys():
             rank_freq_dict[sub_key] = rank_freq_dict[sub_key] / count_sum
             
-       
-        wedge, text= plots[0].pie(rank_freq_dict.values())
+        wedge, text= plots.pie(rank_freq_dict.values())
         labels = list(rank_freq_dict.keys())
         values = list(rank_freq_dict.values())
         for idx, label in enumerate(labels):
@@ -77,31 +107,18 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
             label += str(round(values[idx] * 100, 3))
             label += "%"
             labels[idx] = label
-        plots[0].legend(wedge, labels, title=key,  bbox_to_anchor=(0.9, 0, 0.5, 1))
-      
-    plots[1].axis('off')
-    h_offset = 0.45
-    v_offset = 0.25
-    plots[1].text(h_offset, 1 - v_offset, "Alpha Summary: %s" %(str(path.basename(file_prefix))))
-    plots[1].text(h_offset, 0.95 - v_offset, "     Richness: %s" %(round(richness, 3)))
-    plots[1].text(h_offset, 0.9 - v_offset, "     Chao1: %s" %(round(chao1, 3)))
-    plots[1].text(h_offset, 0.85 - v_offset, "     Shannon's Alpha: %s" %(round(shannons_alpha, 3)))
-    plots[1].text(h_offset, 0.8 - v_offset, "     Berger-Parker: %s" %(round(bp, 3)))
-    plots[1].text(h_offset, 0.75 - v_offset, "     Simpson's Alpha: %s" %(round(simp, 3)))
-    plots[1].text(h_offset, 0.7 - v_offset, "     Inverse Simpson's Alpha: %s" %(round(in_simp, 3)))
-    plots[1].text(h_offset, 0.65 - v_offset, "     Evenness: %s" %(round(evenness, 3)))
-    plots[1].text(h_offset, 0.6 - v_offset, "     Fungus-Species ratio: %s" %(round(fungus_species_ratio, 3)))
-    plots[1].text(h_offset, 0.55 - v_offset, "     Fungi read count: %s" %(round(fungi_count, 3)))
-    plots[1].text(h_offset, 0.5 - v_offset, "     Total reads: %s" %(round(count_sum, 3)))
-    plt.tight_layout()
+        plots.legend(wedge, labels, title=key,  bbox_to_anchor=(0.9, 0, 0.5, 1))
+    
     output.savefig()
     plt.close()
     
-    fig, plots = plt.subplots(1, 4)
-    fig.set_figwidth(12)
-    fig.set_figheight(8)
-    plots[0].axis('off')
-    plots[2].axis('off')
+    
+    
+    # fig, plots = plt.subplots(1, 4)
+    # fig.set_figwidth(12)
+    # fig.set_figheight(8)
+    # plots[0].axis('off')
+    # plots[2].axis('off')
     
     # phylum level heatmap
     # z_scores = scistats.zscore(list(tax_table["phylum"].values()))
@@ -154,6 +171,7 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
  
     top_ten_genus = data[:10]
     top_ten_genus_labels = data_labels[:10]
+    old_top_ten_labels = top_ten_genus_labels.copy()
     top_ten_counts = []
     for label in top_ten_genus_labels:
         top_ten_counts.append(tax_table["genus"][label])
@@ -162,24 +180,214 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
         top_ten_genus_labels[idx] += " - "
         top_ten_genus_labels[idx] += str(top_ten_counts[idx])
         top_ten_genus_labels[idx] += " reads"
+        
+    
 
-    data = np.array(top_ten_genus)
-    im = plots.imshow(top_ten_genus, aspect='auto', cmap='hot', norm=colors.Normalize(vmin=min(z_scores), vmax=max(z_scores)))
-    plots.set_title("Genus Z-Scores top 10")
-    plots.get_xaxis().set_visible(False)
-    plots.set_yticks(np.arange(len(top_ten_genus_labels)), labels=top_ten_genus_labels)
-    plots.figure.colorbar(im)
-    plt.tight_layout()
+    # data = np.array(top_ten_genus)
+    # im = plots.imshow(top_ten_genus, aspect='auto', cmap='hot', norm=colors.Normalize(vmin=min(z_scores), vmax=max(z_scores)))
+    # plots.set_title("Genus Z-Scores top 10")
+    # plots.get_xaxis().set_visible(False)
+    # plots.set_yticks(np.arange(len(top_ten_genus_labels)), labels=top_ten_genus_labels)
+    # plots.figure.colorbar(im)
+    # plt.tight_layout()
+    # output.savefig()
+    # plt.close()
+    
+    # Bar plot 6 top ten genus bar plot
+    top_ten_counts = top_ten_counts[::-1]
+    old_top_ten_labels = old_top_ten_labels[::-1]
+    top_ten_genus_df = pd.DataFrame(top_ten_counts, columns=["Count"], index=old_top_ten_labels)
+    sum_top = top_ten_genus_df["Count"].sum()
+    other_count = len(reads) - sum_top
+    top_ten_genus_df.loc["Other"] = other_count
+    top_ten_genus_df.sort_values(by="Count", ascending=False, inplace=True)
+    
+    plot = top_ten_genus_df.T.plot.barh(stacked=True, legend=False, figsize=(12, 8))
+    
+    plot.get_xaxis().set_ticks([])
+    plot.get_yaxis().set_ticks([])
+    labels = list(top_ten_genus_df.index)
+    values = list(top_ten_genus_df["Count"].values)
+    plt.legend(labels)
+    handles, labels = plot.get_legend_handles_labels()
+    
+    for idx, label in enumerate(labels):
+        labels[idx] += " - "
+        labels[idx] += str(round(values[idx] / len(reads) * 100, 3)) + "%"
+        
+    plot.legend(handles[::-1], labels[::-1], title='Genus', loc='upper left')
+    plot.set_title("Top 10 Genus")
     output.savefig()
     plt.close()
     
-    # Graph rarefaction curves
-    filtered_reads = read_ids_genus.copy()
-    # for idx, level, unit, read_i, identitiy_score, length in mu_data.mapping_units.itertuples():
-    #     if unit in mu_data.mapping_unit_2_tax_id: # if unit was not filtered
-    #         id = mu_data.mapping_unit_2_tax_id[unit]
-    #         filtered_reads.append((unit, id, identitiy_score, length))
+    
+    
+    # Bar plot #1:  In relation to total reads: percentage of reads classified; percentage of reads unclassified (which would include reads filtered-out)
+    classified_read_count = len(read_data.reads)
+    unclassified_read_count = read_data.processed_read_count - classified_read_count
+    classified_read_percentage = classified_read_count / read_data.processed_read_count
+    unclassified_read_percentage = unclassified_read_count / read_data.processed_read_count
+    read_count_data = [unclassified_read_count, classified_read_count]
+    read_count_labels = ["Unclassified", "Classified"]
+    read_percent_data = [unclassified_read_percentage, classified_read_percentage]
+    read_count_df = pd.DataFrame(read_count_data, columns=["Count"], index=read_count_labels)
+    plot = read_count_df.T.plot.barh(stacked=True, legend=False, figsize=(12, 8))
+    plot.get_xaxis().set_ticks([])
+    plot.get_yaxis().set_ticks([])
+    plt.legend(old_top_ten_labels)
+    handles, labels = plot.get_legend_handles_labels()
+    for idx, label in enumerate(labels):
+        labels[idx] += " - "
+        labels[idx] += str(round(read_percent_data[idx] * 100, 3)) + "%"
+    plot.legend(handles[::-1], labels[::-1], title='Type', loc='upper left')
+    plot.set_title("Read Classification")
+    output.savefig()
+    plt.close()
+    
+    
+    
+    # Bar plot #2:  In relation to reads classified:  percentage of reads bacterial; percentage of reads fungal; percentage of reads archaeal
+    fungi_count = 0
+    bacteria_count = 0
+    archaea_count = 0
+    other_eukaryota_count = 0
+    if "kingdom" in tax_table:
+        if "Fungi" in tax_table["kingdom"]:
+            fungi_count = tax_table["kingdom"]["Fungi"]
+
+    if "superkingdom" in tax_table:
+        if "Bacteria" in tax_table["superkingdom"]:
+            bacteria_count = tax_table["superkingdom"]["Bacteria"]
+        if "Archaea" in tax_table["superkingdom"]:
+            archaea_count = tax_table["superkingdom"]["Archaea"]
+        if "Eukaryota" in tax_table["superkingdom"]:
+            other_eukaryota_count = tax_table["superkingdom"]["Eukaryota"] - fungi_count
+    k_data = [bacteria_count, fungi_count, archaea_count, other_eukaryota_count]
+    k_labels = ["Bacteria", "Fungi", "Archaea", "Other Eukaryota"]
+    k_df = pd.DataFrame(k_data, columns=["Count"], index=k_labels)
+    k_plot = k_df.T.plot.barh(stacked=True, legend=False, figsize=(12, 8))
+    k_plot.get_xaxis().set_ticks([])
+    k_plot.get_yaxis().set_ticks([])
+    plt.legend(old_top_ten_labels)
+    handles, labels = k_plot.get_legend_handles_labels()
+    for idx, label in enumerate(labels):
+        labels[idx] += " - "
+        labels[idx] += str(round(k_data[idx] / len(reads) * 100, 3)) + "%"
+    k_plot.legend(handles[::-1], labels[::-1], title='Kingdom', loc='upper left')
+    k_plot.set_title("Kingdom Classification")
+    output.savefig()
+    plt.close()
+    
+    # Bar plot #3:  In relation to reads classified as bacterial:  percentage breakdown of top-10 genera, with another added “other” category to bring-up total to 100%
+    bacteria_read_data = rd.ReadData()
+    for read in read_data.reads.values():
+        bacteria_read_data.insert_read(read)
+    bacteria_read_data.prune_reads_not_in_rank("superkingdom", "Bacteria")
+    bacteria_tax_dict = bacteria_read_data.get_tax_count_dict()
+    bacteria_genus_data = list(bacteria_tax_dict["genus"].values())
+    bacteria_genus_labels = list(bacteria_tax_dict["genus"].keys())
+
+    bacteria_genus_df = pd.DataFrame(bacteria_genus_data, columns=["Count"], index=bacteria_genus_labels)
+    bacteria_genus_df.sort_values(by="Count", ascending=False, inplace=True)
+    top_ten_genus = bacteria_genus_df[:10]
+    remaining_genus = bacteria_genus_df[10:]
+    remaining_genus_sum = remaining_genus.sum()
+    other_count = remaining_genus_sum
+    top_ten_genus.loc["Other"] = other_count
+    
+    top_ten_genus.sort_values(by="Count", ascending=False, inplace=True)
+    df_values = top_ten_genus["Count"].values
+    plot = top_ten_genus.T.plot.barh(stacked=True, legend=False,  figsize=(12, 8))
+    plot.get_xaxis().set_ticks([])
+    plot.get_yaxis().set_ticks([])
+    plt.legend(labels)
+    handles, labels = plot.get_legend_handles_labels()
+    su_a = 0
+    for idx, label in enumerate(labels):
+        labels[idx] += " - "
+        labels[idx] += str(round(df_values[idx] / len(reads) * 100, 3)) + "%"
+        su_a += round(df_values[idx] / len(reads) * 100, 3)
+    plot.legend(handles[::-1], labels[::-1], title='Genus', loc='upper left')
+    plot.set_title("Top 10 Genus of Kingdom Bacteria")
+    output.savefig()
+    plt.close()
+    
+    #bacteria_read_data.prune_by_level
+    
+    
+    # Bar plot #4:  In relation to reads classified as fungal:  percentage breakdown of top-10 genera, with another added “other” category to bring-up total to 100%
+    fungi_read_data = rd.ReadData()
+    for read in read_data.reads.values():
+        fungi_read_data.insert_read(read)
+    fungi_read_data.prune_reads_not_in_rank("kingdom", "Fungi")
+    if len(fungi_read_data.reads) != 0:
+    #fungi_read_data.prune_reads_not_in_rank("superkingdom", "Eukaryota")
+        fungi_tax_dict = fungi_read_data.get_tax_count_dict()
+        fungi_genus_data = list(fungi_tax_dict["genus"].values())
+        fungi_genus_labels = list(fungi_tax_dict["genus"].keys())
+
+        fungi_genus_df = pd.DataFrame(fungi_genus_data, columns=["Count"], index=fungi_genus_labels)
+        fungi_genus_df.sort_values(by="Count", ascending=False, inplace=True)
+        top_ten_genus = fungi_genus_df[:10]
+        remaining_genus = fungi_genus_df[10:]
+        remaining_genus_sum = remaining_genus.sum()
+        other_count = remaining_genus_sum
         
+        top_ten_genus.loc["Other"] = other_count
+        top_ten_genus.sort_values(by="Count", ascending=False, inplace=True)
+        df_values = top_ten_genus["Count"].values
+        plot = top_ten_genus.T.plot.barh(stacked=True, legend=False,  figsize=(12, 8))
+        plot.get_xaxis().set_ticks([])
+        plot.get_yaxis().set_ticks([])
+        plt.legend(labels)
+        handles, labels = plot.get_legend_handles_labels()
+        su_a = 0
+        for idx, label in enumerate(labels):
+            labels[idx] += " - "
+            labels[idx] += str(round(df_values[idx] / len(reads) * 100, 3)) + "%"
+            su_a += round(df_values[idx] / len(reads) * 100, 3)
+        plot.legend(handles[::-1], labels[::-1], title='Genus', loc='upper left')
+        plot.set_title("Top 10 Genus of Kingdom Fungi")
+        output.savefig()
+        plt.close()
+    
+    
+    # Bar plot #5:  In relation to reads classified as archaeal:  percentage breakdown of top-10 genera, with another added “other” category to bring-up total to 100%
+    archael_read_data = rd.ReadData()
+    for read in read_data.reads.values():
+        archael_read_data.insert_read(read)
+    archael_read_data.prune_reads_not_in_rank("superkingdom", "Archaea")
+    if len(archael_read_data.reads) != 0:
+        archael_tax_dict = archael_read_data.get_tax_count_dict()
+        archael_genus_data = list(archael_tax_dict["genus"].values())
+        archael_genus_labels = list(archael_tax_dict["genus"].keys())
+
+        archael_genus_df = pd.DataFrame(archael_genus_data, columns=["Count"], index=archael_genus_labels)
+        archael_genus_df.sort_values(by="Count", ascending=False, inplace=True)
+        top_ten_genus = archael_genus_df[:10]
+        remaining_genus = archael_genus_df[10:]
+        remaining_genus_sum = remaining_genus.sum()
+        other_count = remaining_genus_sum
+        
+        top_ten_genus.loc["Other"] = other_count
+        top_ten_genus.sort_values(by="Count", ascending=False, inplace=True)
+        df_values = top_ten_genus["Count"].values
+        plot = top_ten_genus.T.plot.barh(stacked=True, legend=False,  figsize=(12, 8))
+        plot.get_xaxis().set_ticks([])
+        plot.get_yaxis().set_ticks([])
+        plt.legend(labels)
+        handles, labels = plot.get_legend_handles_labels()
+        su_a = 0
+        for idx, label in enumerate(labels):
+            labels[idx] += " - "
+            labels[idx] += str(round(df_values[idx] / len(reads) * 100, 3)) + "%"
+            su_a += round(df_values[idx] / len(reads) * 100, 3)
+        plot.legend(handles[::-1], labels[::-1], title='Genus', loc='upper left')
+        plot.set_title("Top 10 Genus of Kingdom Archaea")
+        output.savefig()
+        plt.close()  
+    
+    filtered_reads = read_ids_genus.copy()    
     reads_processed = 0
     read_per_species = {}
     read_per_otu = {}
@@ -190,6 +398,8 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
     alphas_chao1_rare = []
     alphas_shannon_rare = []
     alphas_evenness_rare = []
+   
+    random.seed(seed)
     
     while len(filtered_reads) > 0:
         index = random.choice(range(len(filtered_reads)))
@@ -295,74 +505,29 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Alpha Diversity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    #parser.add_argument("classification_file_prefix", help="Prefix of the classification file")
-    parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
-    #parser.add_argument("-M", "--mtsv", action="store_true", help="Classifcation file is MTSV output")
-    parser.add_argument("-mtsv", "--mtsv-file",  type=str, help="MTSV File")
-    parser.add_argument("-mtsvl", "--mtsv-lookup-file",  type=str, help="MTSV Lookup File")
-    parser.add_argument("-meta", "--meta-maps-file",  type=str, help="MetaMaps File")
-    parser.add_argument("-I", "--ignore-ids", action="store_true", help="Ignore ids in the file .ignoreids")
-    parser.add_argument("-S", "--skip-coverage-filter", action="store_true", help="Skip the coverage filtering step. Saves time if you already have a .ignoreids file. Will not generate an outlier pdf.")
-    parser.add_argument("-metaref", "--meta-maps-reference-file", type=str, help="MetaMaps file to filter MTSV with")
-    parser.add_argument("-mtsvref", "--mtsv-reference-file", type=str, help="MTSV file to filter MetaMaps reads with")
-
+    parser.add_argument("-f", "--file", type=str, help="Pickle file name", default=None)
+    parser.add_argument("-s", "--seed", type=str, help="Seed for random number generator", default=0)
 
     
     args = parser.parse_args()
     config = vars(args)
-    min_freq = config["min_frequency"]
-    #file_prefix = config["classification_file_prefix"]
-    # max_outlier_coverage = config["max_avg_outlier_coverage"]
-    # proportion = config["trim_proportion"]
-    ignore_ids = config["ignore_ids"]
-    skip_coverage_filter = config["skip_coverage_filter"]
-    meta_file = config["meta_maps_file"]
-    mtsv_file = config["mtsv_file"]
-    mtsv_lookup_file = config["mtsv_lookup_file"]
-    meta_ref_file = config["meta_maps_reference_file"]
-    mtsv_ref_file = config["mtsv_reference_file"]
-    file_prefix = None
-       
-    id_blacklist_dict = {}
-    if ignore_ids:
-        print("Ignoring ids from file .ignoreids")
-        for id in open(".ignoreids", "r"):
-            id = id.strip()
-            if id not in id_blacklist_dict:
-                id_blacklist_dict[id] = True
-
-    read_data = None
-    output_name = ""
+    file = config["file"]
+    seed = config["seed"]
     
-    if meta_file:
-        read_data = rd.ReadData()
-        read_data.parse_metamaps_reads_2_taxon(meta_file)
-        output_name += path.basename(meta_file)
-        if mtsv_ref_file:
-            read_data.parse_mtsv_reads(mtsv_ref_file, mtsv_lookup_file, True)
-            read_data.prune_non_incidental_reads()
-            read_data.prune_by_level("genus")
-        
-    if mtsv_file:
-        read_data = rd.ReadData()
-        read_data.parse_mtsv_reads(mtsv_file, mtsv_lookup_file)
-        output_name += path.basename(mtsv_file)
-        if meta_ref_file:
-            read_data.parse_metamaps_reads_2_taxon(meta_ref_file, True)
-            read_data.prune_non_incidental_reads()
-            read_data.resolve_lca()
-            read_data.prune_by_level("genus")
-        
-    if not mtsv_file and not meta_file:
-        sys.exit("Error: Must provide either a metamaps or mtsv file")
+    if file is None:
+        files = listdir("reads")
+        for file in files:
+            if path.splitext(file)[1] != ".p":
+                continue
+            file = path.splitext(file)[0] + ".p"
+            break
+        if file is None:
+            sys.exit("No files found in reads ~/reads directory.") 
+            
+    data = pickle.load(open("reads/" + file, "rb"))
+    file = path.splitext(file)[0]
+    read_data = rd.ReadData()
+    read_data.load_data(data)
     
-    if mtsv_file and meta_file:
-        sys.exit("Error: Cannot provide both a metamaps and mtsv file. Choose one. Other file must be used as a reference file with -metaref or -mtsvref")
-        
-    
-    
-    # if not skip_coverage_filter:
-    #     mu_data.load_coverage()
-    #     mu_data.filter_sig_bin_outliers()
-    generate_alpha_report(output_name, read_data)
+    generate_alpha_report(file, read_data)
     

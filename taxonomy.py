@@ -3,14 +3,16 @@ from ete3 import Tree
 
 class TaxDict(dict):
     ncbi = None
+    hashes = {}
     
     def __init__(self, update_local: bool=False):
         self.ncbi = NCBITaxa()
         if update_local:
             self.ncbi.update_taxonomy_database()
+        self.hashes = {}
             
         
-    def insert_id(self, id: str, count: int):
+    def insert_id(self, id: str, count: int, hash: str=None):
         lineage = self.ncbi.get_lineage(id)
         ranks = list(self.ncbi.get_rank(lineage).values())
         names = list(self.ncbi.get_taxid_translator(lineage).values())
@@ -23,6 +25,10 @@ class TaxDict(dict):
             if name not in self[rank]:
                 self[rank][name] = 0
             self[rank][name] += count
+            
+            if rank not in self.hashes:
+                self.hashes[rank] = {}
+            self.hashes[rank][hash] = True
     
             
     def id_2_name(self, id: str) -> str:
@@ -39,7 +45,8 @@ class TaxDict(dict):
         for idx, id in enumerate(levels):
             if ranks[id] == level:
                 return id
-        exit("Level not found")
+        return None
+        #exit("Level not found")
             
             
     def insert_lca(self, count, ids: list):
