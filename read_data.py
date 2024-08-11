@@ -2,13 +2,17 @@ import random
 import sys
 import re
 import numpy as np
-from scipy import stats
-import pandas as pd
 import pandas as pd
 from taxonomy import TaxDict
-import matplotlib.pyplot as plt
+from scipy import stats
 
 class Read:
+    """
+    _summary_
+    
+    Class to represent a single read. Contains a hash to identify the read and an assigned taxon ID.
+    """    
+    
     assigned_taxon_id = None # Assigned taxon ID (Not necessarily species level)
     hash = None # Unique hash to identify read
     
@@ -20,18 +24,23 @@ class Read:
         self.assigned_taxon_id = id
     
      
-        
-
 class ReadData:
-    # Class for loading and processing read data
+    """
+    _summary_
+
+    ReadData is a class for loading and processing read data 
+    from MetaMaps and MTSV output files. Supports filtering by 
+    frequency and coverage. The usage of MTSV data requires a 
+    lookup file to be present. The lookup file is used to match 
+    read IDs to hashes between MTSV and MetaMaps output files.
+    """    
     
-    _id_blacklist_dict: dict = {} # Dict of ids to exclude/ignore of format: <numeric taxon id, Bool>, True if excluded
+    _id_blacklist_dict: dict = {} # Dict of ids to exclude/ignore of format: <numeric taxon id, Bool>, True if excluded. TODO: Implement
     _tax_dict: TaxDict # Dictionary of taxon IDs and read counts assigned for each ID
     _incidence_dict: dict = {} # Dictionary of taxon IDs based on being seen in reads <taxonID, bool>
+    
     reads = dict() # Dictionary of reads given hash
     processed_read_count = 0 # Total number of reads processed including those discarded/pruned
-    
-    
     
     # TODO: Implement BLACKLIST
     def __init__(self, rebuild_database = False, id_blacklist_dict: dict = {}) -> None:
@@ -42,17 +51,30 @@ class ReadData:
 
     
     def load_data(self, data: tuple) -> None:
+        """
+        _summary_
+
+        Loads a tuple of data into the class. Used for loading data from a pickle file.
+
+        Args:
+            data (tuple): _description_: Tuple of data to load in the format (reads, processed_read_count)
+        """        
         reads = data[0]
         processed_read_count = data[1]
         self.reads = reads
         self.processed_read_count = processed_read_count
-    
-    
-    def get_tax_dict(self) -> TaxDict:
-        return self._tax_dict
         
     
     def get_tax_count_dict(self) -> TaxDict:
+        """
+        _summary_
+        
+        Get a dictionary of taxon IDs and read counts assigned for each ID for all available NCBI levels
+
+        Returns:
+            TaxDict: _description_: Dictionary of taxon IDs and read counts assigned for each ID
+        """        
+        
         self._tax_dict = TaxDict(False)
         for read in self.reads.values():
             if isinstance(read.assigned_taxon_id, list):
@@ -63,6 +85,14 @@ class ReadData:
      
         
     def insert_read(self, new_read: Read) -> None:
+        """
+        _summary_
+        
+        Insert an instantiated read object into the read database.
+
+        Args:
+            new_read (Read): _description_: Read object to insert
+        """        
         self.processed_read_count += 1
         id = new_read.assigned_taxon_id
         if isinstance(id, list):
@@ -74,15 +104,39 @@ class ReadData:
         if new_read.hash in self.reads:
             print("Error: Read %s already parsed" % new_read.hash)
             sys.exit(1)
-        self.reads[new_read.hash] = new_read    
+        self.reads[new_read.hash] = new_read
+    
+    
+    def insert_hash_as_read(self, hash: str, assigned_id: int) -> None: 
+        """
+        _summary_
+        
+        Insert a hash as a read into the read database.
+
+        Args:
+            hash (str): _description_: Unique hash to identify read (as determined by MetaMaps/MTSV)
+            assigned_id (int): _description_: Taxon ID assigned to read
+        """        
+        
+        new_read = Read(hash, assigned_id)
+        self.insert_read(new_read)
     
     
     def prune_non_incidental_reads(self) -> int:
+        """
+        _summary_
+        
+        Prune reads that are not incidental (not seen in incidence_dict). 
+        This means that if the reads are MTSV, and the incidence dict was 
+        built with MetaMaps, only reads that are seen in both will be kept.
+
+        Returns:
+            int: _description_: Number of reads pruned
+        """        
+        
         if len(self.reads) == 0:
             return
-        """
-        Remove reads not in incidence dictionary
-        """
+
         read_keys = list(self.reads.keys())
         reads_deleted = 0
         start_read_count = len(read_keys)
@@ -95,8 +149,21 @@ class ReadData:
     
     
     def prune_by_level(self, level: str) -> int:
+        """
+        _summary_
+        
+        Prune all reads that are missing classification at the level
+
+        Args:
+            level (str): _description_: NCBI rank level
+
+        Returns:
+            int: _description_: Number of reads pruned
+        """        
+        
         if len(self.reads) == 0:
             return
+        
         read_keys = list(self.reads.keys())
         reads_deleted = 0
         start_read_count = len(read_keys)
@@ -115,8 +182,22 @@ class ReadData:
     
     
     def prune_reads_not_in_rank(self, rank_level: str, rank_name: str) -> int:
+        """
+        _summary_
+        
+        Remove all reads that do not have an NCBI rank of rank_name at rank_level
+
+        Args:
+            rank_level (str): _description_: NCBI rank level
+            rank_name (str): _description_: NCBI rank name
+
+        Returns:
+            int: _description_: Number of reads pruned
+        """        
+        
         if len(self.reads) == 0:
             return
+        
         read_keys = list(self.reads.keys())
         reads_deleted = 0
         start_read_count = len(read_keys)
@@ -130,18 +211,11 @@ class ReadData:
                 rank_names.append(name)
                 
             if rank_name in rank_names:
-                #print(rank_names)
                 pass
             else:
                 self.reads.pop(read)
                 reads_deleted += 1
                 continue
-                
-            # if rank_name not in rank_names:
-            #     self.reads.pop(read)
-            #     reads_deleted += 1
-            #     break
-            
             
             for idx, id in enumerate(lineage):
                 current_rank_name = self._tax_dict.id_2_rank(id)
@@ -155,10 +229,18 @@ class ReadData:
                         reads_deleted += 1
                         break
         print("Pruned %d reads" % reads_deleted + " of %d" % start_read_count, "not in rank", rank_name)
-        #print(self.get_tax_count_dict())
+    
     
     
     def resolve_lca(self) -> None:
+        """
+        _summary_
+        
+        When there are multiple taxon IDs assigned to a read, resolve to the LCA of the taxon IDs.
+        IT IS REQUIRED TO RUN THIS FUNCTION BEFORE USING THE READ DATA FOR ANALYSIS.
+        
+        """        
+        
         for read in self.reads:
             current_read = self.reads[read]
             if isinstance(current_read.assigned_taxon_id, list):
@@ -186,8 +268,7 @@ class ReadData:
 
         
     def parse_mtsv_reads(self, read_file_name: str, lookup_file_name: str, incidence_only: bool = False) -> None:
-        print("Parsing MTSV reads")
-        lookup_dict = {} # Convert read id to hash
+        lookup_dict = {} 
         file = lookup_file_name
         opened_file = open(file, "r")
         lines = opened_file.readlines()
@@ -232,8 +313,6 @@ class ReadData:
             
             if incidence_only:
                 self._incidence_dict[hash] = 1
-                # for id in min_ids:
-                #     self._incidence_dict[id] = 1
                 continue
 
             if len(min_ids) == 1:
@@ -246,8 +325,7 @@ class ReadData:
                 sys.exit("Error: No taxon ID found for read %s" % read_id, "Is there a formatting error?")
 
 
-    def parse_metamaps_reads_2_taxon(self, reads_2_taxon_file_name: str, incidence_only: bool = False) -> None:
-        print("Parsing MetaMaps reads")
+    def parse_metamaps_reads_2_taxon(self, reads_2_taxon_file_name: str, incidence_only: bool = False) -> None: 
         file = reads_2_taxon_file_name
         opened_file = open(file, "r")
         lines = opened_file.readlines()
@@ -258,7 +336,7 @@ class ReadData:
             id = id.strip()
             hash = hash.strip()
             
-            if id == "0": # Unassigned
+            if id == "0": # Skip unassigned reads
                 self.processed_read_count += 1
                 continue
             
@@ -271,8 +349,14 @@ class ReadData:
             self.insert_read(new_read)
             
 
-# MetaMaps read data exclusively for plotting
+
+  
 class ReadDataMM:  
+    """
+    ReadDataMM is a class for loading and processing read data from MetaMaps output files. Supports filtering by frequency and coverage.
+        Inelegant and slow, but functional.
+    """
+    
     file_prefix: str
     mapping_units: pd.DataFrame
     coverage_data: pd.DataFrame
@@ -423,6 +507,7 @@ class ReadDataMM:
                 self.contig_2_coverages[contig].append(coverage)
         self.are_coverages_loaded = True
     
+    
     def filter_sig_bin_outliers(self, non_zero_count_threshold: int=3, preserve_outliers: bool=False) -> int:
         print("Filtering by significant bins")
         if self.are_coverages_loaded == False:
@@ -480,43 +565,7 @@ class ReadDataMM:
             self.load_coverage() # todo: rebuild hashmaps faster than re-reading file(s)
         
         return o_count
-    
-    def filter_coverage_tm_outliers(self, max_outlier_coverage: float, proportion, preserve_outliers: bool=False) -> int:
-        if self.are_coverages_loaded == False:
-            print("Error: No coverage data loaded, please load coverage data before filtering by coverage")
-            return
         
-        o_count = 0
-        temp_filtered_tax_ids = dict(self.filtered_tax_ids)
-        self.tax_id_is_outlier = {}
-        
-        for current_tax_id in temp_filtered_tax_ids.keys():
-            if current_tax_id in self.excluded_id_dict:
-                continue
-            
-            if current_tax_id not in self.tax_id_is_outlier:
-                self.tax_id_is_outlier[current_tax_id] = False
-
-            all_coverages = []
-            current_contigs = self.tax_id_2_all_contigs[current_tax_id]
-            for contig in current_contigs:
-                current_coverages = self.contig_2_coverages[contig]
-                all_coverages.extend(current_coverages)
-                
-            tm = stats.trim_mean(all_coverages, proportion)
-            
-            if (tm <= max_outlier_coverage):
-                if not preserve_outliers:
-                    self.tax_id_2_mapping_units.pop(current_tax_id, None)
-                    self.filtered_tax_ids.pop(current_tax_id, None)
-                self.tax_id_is_outlier[current_tax_id] = True
-                o_count += 1
-                
-        if not preserve_outliers:   
-            self.load_coverage() # todo: rebuild hashmaps faster than re-reading file
-            
-        return o_count
-    
     
     def _init_tax_dict(self) -> None:
         self.tax_dict = TaxDict()

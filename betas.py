@@ -2,6 +2,10 @@ import math
 import composition_stats as cs
 import numpy as np
 
+"""
+Collection of beta diversity metric functions for microbial communities.
+"""
+
 def bray_curtis_distance(mu1_abundances, mu2_abundances, all_ids: dict[str, int]):
     cij = 0
     sij = 0
@@ -26,10 +30,11 @@ def jaccard_distance(mu1_abundances, mu2_abundances, all_ids: dict[str, int]):
     num_common = 0
     for id in all_ids.keys():
         if id in mu1_abundances and id in mu2_abundances:
-            num_common += 1
+            if mu1_abundances[id] > 0 and mu2_abundances[id] > 0:
+                num_common += 1
         else:
-            print(id)
-    
+            pass
+
     return 1 - (num_common / len(all_ids))
 
 

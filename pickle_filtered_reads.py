@@ -7,61 +7,10 @@ import taxonomy as tx
 import pandas as pd
 import pickle
 import sys
-
-
-def create_coverage_outllier_table(file_prefix, min_freq):
-    mapping_units = rd.ReadDataMM(file_prefix, min_freq)
-   
-    mapping_units.load_coverage()
-    outlier_dict = {}
-    
-    #read_data = rd.ReadData()
-    tax_dict = tx.TaxDict()
-    
-    unique_id_count = 0
-    unit_identity_dict = {}
-    non_outlier_genus_dict = {}
-    for idx, level, unit, read_i, identitiy_score, length in mapping_units.mapping_units.itertuples():
-        current_id_label = unit
-        matches = re.findall("kraken:taxid\\|(x?\\d+)\\|", current_id_label)
-        id = str(matches[0])
-        if id not in unit_identity_dict:
-            unique_id_count += 1
-            unit_identity_dict[id] = []
-        unit_identity_dict[id].append(identitiy_score)
-    print("Number of unique ids: ", unique_id_count)
-        
-    outliers = []
-    mapping_units.filter_sig_bin_outliers(3, True)
-
-    for id in mapping_units.filtered_tax_ids.keys():
-        if mapping_units.tax_id_is_outlier[id]:
-            outliers.append(id)
-            if id not in outlier_dict:
-                outlier_dict[id] = True
-
-    print("Number of outliers: ", len(outlier_dict))
-    # for unit in unit_identity_dict:
-    #     id = unit
-    #     genus_id = tax_dict.id_2_level_id(id, "genus")
-    #     if id in outlier_dict:
-    #         if genus_id in non_outlier_genus_dict:
-    #             outlier_dict.pop(id)
-
-    outliers = list(outlier_dict.keys())
-    # print("Number of outliers after filtering: ", len(outliers))
-            
-            
-    iter = 0
-    # Create text file with outliers
-    with open(".ignoreids", "w") as f:
-        for outlier in outliers:
-            iter += 1
-            f.write(str(outlier) + "\n")
-    print(iter, "outliers written to .ignoreids")
+import srs as srs    
     
     
-def get_coverage_outllier_list(file_prefix) -> list:
+def _get_coverage_outllier_list(file_prefix) -> list:
     mapping_units = rd.ReadDataMM(file_prefix, 0.0)
    
     mapping_units.load_coverage()
@@ -76,7 +25,7 @@ def get_coverage_outllier_list(file_prefix) -> list:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Outlier detection", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(description="Takes either MTSV or MetaMaps reads and loads into a pickle file for analysis.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-mtsv", "--mtsv-file",  type=str, help="MTSV File")
     parser.add_argument("-mtsvl", "--mtsv-lookup-file",  type=str, help="MTSV Lookup File")
     parser.add_argument("-meta", "--meta-maps-file",  type=str, help="MetaMaps File")
@@ -88,6 +37,7 @@ if __name__ == "__main__":
     parser.add_argument("-C", "--clear", action="store_true", help="DANGER! Clears all files in reads directory") # DANGEROUS?
     parser.add_argument("-B", "--sig-bin", action="store_true", help="Enable sig-bin filtering (METAMAPS ONLY)", default=False)
     parser.add_argument("-r", "--rare", type=int, help="Rareify to given read count", default=None)
+    parser.add_argument("-S", "--SRS", action="store_true", help="Enable SRS. Requires R to be set up in the current system's environment", default=False)
     
         
     args = parser.parse_args()
@@ -139,6 +89,8 @@ if __name__ == "__main__":
             read_data.parse_mtsv_reads_2_taxon(mtsv_reference_file, True)
             read_data.prune_non_incidental_reads()
     
+    read_data.prune_by_level("genus")
+    
     if alias is not None:
         name = alias
             
@@ -148,7 +100,7 @@ if __name__ == "__main__":
         sig_bin_file = path.splitext(os.path.basename(sig_bin_file))[0]
         sig_bin_file_path = path.dirname(meta_maps_file)
         sig_bin_file = path.join(sig_bin_file_path, sig_bin_file)
-        outlier_list = get_coverage_outllier_list(sig_bin_file)
+        outlier_list = _get_coverage_outllier_list(sig_bin_file)
         outlier_dict = {}
         for outlier in outlier_list:
             outlier_dict[outlier] = True
@@ -162,13 +114,12 @@ if __name__ == "__main__":
                 read_data.reads.pop(read)
         print(i, "outliers discarded")
     
-    
-    # frequency filter TODO: LOW PRIORITY
-    
     # rareify
     if rare:
-        read_data.rarefy(rare, seed)
-    
+        if not config["SRS"]:
+            read_data.rarefy(rare, seed)
+        else:
+            read_data = srs.srs_on_read_data(read_data, rare, seed)
     
     # pickle reads
     currents_reads = read_data.reads
