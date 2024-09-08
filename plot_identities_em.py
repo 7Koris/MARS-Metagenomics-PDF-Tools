@@ -161,8 +161,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot MetaMaps Identity Results", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("classification_file_prefix", help="Prefix of the classification file")
     parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
-    parser.add_argument("-t", "--min-trim-mean", type=float, help="Minimum coverage trim mean value to consider a taxon ID as an outlier. Outliers will be written to a separate PDF where trim_mean <= min_trim_mean", default=0.0)
-    parser.add_argument("-p", "--trim-proportion", type=float, help="Proportion of sorted coverage data to trim from both ends for outlier detection", default=0.003)
     parser.add_argument("-o", "--output", type=str, help="Output file name", default="")
     parser.add_argument("-I", "--ignore-ids", action="store_true", help="Ignore ids in the file .ignoreids")
     parser.add_argument("-S", "--skip-coverage-filter", action="store_true", help="Skip the coverage filtering step. Saves time if you already have a .ignoreids file. Will not generate an outlier pdf.")
