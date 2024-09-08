@@ -32,7 +32,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     for idx, read_data in enumerate(all_read_data):
         current_name = all_read_data_names[idx]
         tax_count_dict = read_data.get_tax_count_dict()
-        tax_dict = read_data.get_tax_dict()
+        tax_dict = read_data.get_tax_count_dict()
         
         taxa_level_estimates = tax_count_dict["genus"]
         read_ids = [read.get_assignment() for read in read_data.reads.values()]

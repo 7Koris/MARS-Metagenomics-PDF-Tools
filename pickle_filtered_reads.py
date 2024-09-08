@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser.add_argument("-metaref", "--meta-maps-reference-file", type=str, help="MetaMaps file to filter MTSV with")
     parser.add_argument("-mtsvref", "--mtsv-reference-file", type=str, help="MTSV file to filter MetaMaps reads with")
     parser.add_argument("-s", "--seed", type=int, help="Seed for random number generator", default=0)
-    parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
+    # parser.add_argument("-f", "--min-frequency", type=float, help="Minimum frequency of taxon label to plot", default=0.0)
     parser.add_argument("-a", "--alias", type=str, help="Alias for file", default=None)
     parser.add_argument("-C", "--clear", action="store_true", help="DANGER! Clears all files in reads directory") # DANGEROUS?
     parser.add_argument("-B", "--sig-bin", action="store_true", help="Enable sig-bin filtering (METAMAPS ONLY)", default=False)
@@ -42,7 +42,7 @@ if __name__ == "__main__":
         
     args = parser.parse_args()
     config = vars(args)
-    min_freq = config["min_frequency"]
+    # min_freq = config["min_frequency"]
     seed = config["seed"]
     
     mtsv_file = config["mtsv_file"]
