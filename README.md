@@ -18,14 +18,14 @@ The reports currently avaialble are:
 ## Getting Started
 The workflow using these scripts goes down two different paths. 
 
-Either **you need biodiversity data** or **you need organism specific data**.
-As such, there will be two sections dedicated for either need. For biodiversity data, follow the [**Diversity Report**](#diversity-reports) path. For organism specific data, follow the [**Identity EM Report**](#identity-em-reports) path.
+Either **you need biodiversity data** or **you need organism-specific data**.
+As such, there will be two sections dedicated to either need. For biodiversity data, follow the [**Diversity Report**](#diversity-reports) path. For organism specific data, follow the [**Identity EM Report**](#identity-em-reports) path.
 
-Regardless of what path, need either [MTSV](https://github.com/FofanovLab/MTSv) or [MetaMaps](https://github.com/DiltheyLab/MetaMaps/tree/master) data.
+Regardless of what path, you'll need either [MTSV](https://github.com/FofanovLab/MTSv) or [MetaMaps](https://github.com/DiltheyLab/MetaMaps/tree/master) data.
 This will require performing DNA sequencing to generate read data (often in FASTQ format), and then will require feeding that read data into either the MTSV or MetaMaps toolchain.
 
 # Diversity Reports
-Assuming you have processed read data with either one of or both of MetaMaps and MTSV, you are ready to generate biodiversity reports. The first step in this process is to convert the data to local files for the diversity scripts to process. This is done with [pickle_filteredreads.py](#pickle_filtered_readspy).
+Assuming you have processed read data with either one or both of MetaMaps and MTSV, you are ready to generate biodiversity reports. The first step in this process is to convert the data to local files for the diversity scripts to process. This is done with [pickle_filteredreads.py](#pickle_filtered_readspy).
 
 ## Read Pickling
 
@@ -42,7 +42,7 @@ We should now have a a file in reads/myData.p which locally stores the analyzed 
 
 It's entirely possible that your chosen metagenomics tool in its given configuration is detecting outliers/false positives for read assignments, so it is **highly suggested** you use the plot_identities_em.py script first to evaluate the reliability of read assignments.
 
-Some parameters form pickle_filtered_reads.py can be use to normalize or filter read data based on certain criteria.
+Some parameters from pickle_filtered_reads.py can be use to normalize or filter read data based on certain criteria.
 **If you wish to normalize by the number of reads**, rarefaction and [SRS](https://github.com/vitorheidrich/SRS) are provided. Please configure R in your environment if you will be using SRS.
 - Rarefaction (to 1000 reads)
   - ```python ./pickle_filtered_reads.py  -meta <basename>.EM.reads2Taxon -a myData -r 10000```

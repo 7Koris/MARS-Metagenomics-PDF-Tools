@@ -6,7 +6,7 @@ import random as rand
 
 import pandas as pd
 
-srs_path = 'lib\\srs\\SRS.R'
+srs_path = 'R\\SRS.R'
 
 # Id list
 def srs_on_id_list(id_list: list, new_read_count: int, seed = 0) -> dict:
