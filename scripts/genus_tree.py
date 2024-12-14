@@ -25,7 +25,7 @@ if __name__ == "__main__":
 		if file is None:
 			sys.exit("No files found in ~/reads directory.") 
 			
-	data = pickle.load(open("reads/" + file, "rb"))
+	data = pickle.load(open("../reads/" + file, "rb"))
 	read_data = rd.ReadData()
 	read_data.load_data(data)
  
