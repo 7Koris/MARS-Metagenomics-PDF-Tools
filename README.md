@@ -17,6 +17,12 @@ The reports currently avaialble are:
   - Optimized clone of plotIdentities_EM.R by the [MetaMaps](https://github.com/DiltheyLab/MetaMaps/tree/master) authors
   - Provides read metrics at the organism level
   - **Only available for [MetaMaps](https://github.com/DiltheyLab/MetaMaps/tree/master) EM Data**
+ 
+### Genus-level TreeMap Plots
+- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/241.html
+- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/247.html
+- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/325.html
+- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/337.html
 
 ## Getting Started
 The workflow using these scripts goes down two different paths. 
