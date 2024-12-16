@@ -1,5 +1,8 @@
 # MARS Metagenomics PDF Tools
+#### M.A.R.S. - Microbiology in Agriculture Research Station
 This is a collection of scripts for generating reports on metagenomics data produced by the analysis of the MetaMaps and MTSV mapping algorithms.
+
+
 
 These scripts generate reports for Alpha diversity, Beta diversity, and direct read assignment at the organism level.
 
