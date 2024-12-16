@@ -8,7 +8,6 @@ import pandas as pd
 
 srs_path = 'R\\SRS.R'
 
-# Id list
 def srs_on_id_list(id_list: list, new_read_count: int, seed = 0) -> dict:
     """_summary_
 

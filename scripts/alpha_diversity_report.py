@@ -6,9 +6,9 @@ import sys
 import pandas as pd
 import read_data as rd
 import matplotlib.pyplot as plt
-import alphas as alphas
 import pickle
 from matplotlib.backends.backend_pdf import PdfPages
+from utility import Alphas as alphas
 from os import path, listdir
 from scipy import stats as scistats
 
@@ -401,7 +401,6 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
     plt.close()
     print("Alpha report written to " + output._file.fh.name)
     output.close()
-
 
 
 if __name__ == "__main__":

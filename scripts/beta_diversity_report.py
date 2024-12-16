@@ -7,8 +7,7 @@ import sys
 import read_data as rd
 import numpy as np
 import matplotlib.pyplot as plt
-import alphas as alphas
-import betas as betas
+from utility import Alphas as alphas, Betas as betas
 from os import listdir, path
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats as scistats
@@ -247,7 +246,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
     fig, plots = plt.subplots(1, 1)
     fig.set_figwidth(12)
     fig.set_figheight(8)
-    im = plots.imshow(data, aspect='auto', cmap='hot' )
+    im = plots.imshow(data, aspect='auto', cmap='Reds')
     plots.set_title("Phylum Z-Scores")
     plots.set_xticks(np.arange(len(x_labels)), labels=x_labels, rotation=45, size='small')
     plots.set_yticks(np.arange(len(y_labels)), labels=y_labels) 

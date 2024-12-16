@@ -1,7 +1,6 @@
 import argparse
 import sys
 import read_data as rd
-import alphas as alphas
 import pickle
 from os import path, listdir
 from plotnine import *
@@ -9,14 +8,14 @@ import plotly.express as px
 from ete3 import NCBITaxa
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Alpha Diversity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser = argparse.ArgumentParser(description="Genus Tree", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument("-f", "--file", type=str, help="Pickle file name", default=None)
 	args = parser.parse_args()
 	config = vars(args)
 	file = config["file"]
 	
 	if file is None:
-		files = listdir("reads")
+		files = listdir("../reads")
 		for file in files:
 			if path.splitext(file)[1] != ".p":
 				continue
@@ -25,7 +24,7 @@ if __name__ == "__main__":
 		if file is None:
 			sys.exit("No files found in ~/reads directory.") 
 			
-	data = pickle.load(open("reads/" + file, "rb"))
+	data = pickle.load(open("../reads/" + file, "rb"))
 	read_data = rd.ReadData()
 	read_data.load_data(data)
  
@@ -37,12 +36,7 @@ if __name__ == "__main__":
 			id_dict[assignment] = 1
 		else:
 			id_dict[assignment] += 1
-	# SK
-	# Phylum
-	# Class
-	# Order
-	# Family
-	# Genus
+	
 	rank_dict = {}
 	for value in id_dict:
 		lineage = ncbi.get_lineage(value)
@@ -55,7 +49,6 @@ if __name__ == "__main__":
 		orank = -1
 		frank = -1
 		grank = -1
-
 
 		for idx, rank in ranks.items():
 			if rank == "superkingdom":

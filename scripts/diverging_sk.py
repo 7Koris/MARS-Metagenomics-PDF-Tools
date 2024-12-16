@@ -4,14 +4,12 @@ import pickle
 import sys
 import pandas as pd
 import read_data as rd
-import alphas as alphas
-import betas as betas
 from plotnine import *
 from os import listdir, path
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats as scistats
 
-def generate_beta_report(output_name, all_read_data_names, all_read_data):
+def generate_diverging_sk(output_name, all_read_data_names, all_read_data):
 	if not os.path.exists("reads"):
 		os.makedirs("reads")
 	
@@ -23,7 +21,6 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
 		genus_level_counts = tax_count_dict["phylum"]
 		genus_reads[current_name] = genus_level_counts
 		
-
 	for gr_name in genus_reads:
 		for read in genus_reads[gr_name]:
 			for gr_name2 in genus_reads:
@@ -63,8 +60,7 @@ def generate_beta_report(output_name, all_read_data_names, all_read_data):
 			labs(title=f"Z-score of {gr_name}", x="Genus", y="Z-score")
 		gg_plots.append(gg)
 
-   
-	with PdfPages(output_name + '.pdf') as pdf:
+	with PdfPages(output_name + '.diverging.pdf') as pdf:
 		for plot in gg_plots:
 			pdf.savefig(plot.draw())
 	   
@@ -101,5 +97,5 @@ if __name__ == "__main__":
 		all_read_data.append(read_data)
 		all_read_data_names.append(current_name)
 
-	generate_beta_report( output_prefix, all_read_data_names, all_read_data)
+	generate_diverging_sk( output_prefix, all_read_data_names, all_read_data)
 	

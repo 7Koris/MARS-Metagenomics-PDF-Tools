@@ -3,19 +3,18 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import time
 import argparse
-import read_data as rd
-import pickle_filtered_reads as pfr
-
+import utility as ut
+import mm_identity_data as mmid
 
 def plot_identities(file_prefix, min_plot_freq, min_tm: float=0.0, trim_proportion: float=.003, output: str="", excluded_tax_ids: list[str]=[], skip_coverage_filter: bool=False, verbose: bool=False) -> None:
     start_time = time.time()
     t0 = time.time()
     outliers = []
     if not skip_coverage_filter:
-        outliers = pfr.get_coverage_outllier_list(file_prefix)
+        outliers = ut.get_coverage_outllier_list(file_prefix)
     excluded_tax_ids.extend(outliers)
     
-    mu_data = rd.ReadDataMM(file_prefix, min_plot_freq, excluded_taxon_ids=[])
+    mu_data = mmid.MetaMapsIdentityData(file_prefix, min_plot_freq, excluded_taxon_ids=[])
     mu_data.load_coverage()
     
     if verbose:
