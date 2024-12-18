@@ -327,7 +327,6 @@ def generate_alpha_report(file_prefix, read_data: rd.ReadData):
         index = random.choice(range(len(filtered_reads)))
         (id) = filtered_reads.pop(index)
         reads_processed += 1
-        
 
         if id not in read_per_species:
             read_per_species[id] = 0
@@ -407,6 +406,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Alpha Diversity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("-f", "--file", type=str, help="Pickle file name", default=None)
     parser.add_argument("-s", "--seed", type=str, help="Seed for random number generator", default=0)
+    parser.add_argument("-rt", "--rank-type", type=str, help="Filter to rank type", default=None)
+    parser.add_argument("-rn", "--rank-name", type=str, help="Filter to specific rank name", default=None)
+
 
     
     args = parser.parse_args()

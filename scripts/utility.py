@@ -1,6 +1,5 @@
 import math
 import math
-import composition_stats as cs
 import numpy as np
 import mm_identity_data as mmid
 
@@ -149,28 +148,5 @@ class Betas:
             elif id in mu2_abundances:
                 distance += mu2_abundances[id]
         return distance
-
-
-    def aitchison_distance(mu1_abundances, mu2_abundances, all_ids: dict[str, int]):
-        clr_mu1 = cs.clr(np.array(list(mu1_abundances.values())))
-        clr_mu1_dict = {}
-        for i, id in enumerate(mu1_abundances.keys()):
-            clr_mu1_dict[id] = clr_mu1[i]
-      
-        clr_mu2 = cs.clr(np.array(list(mu2_abundances.values())))
-        clr_mu2_dict = {}
-        for i, id in enumerate(mu2_abundances.keys()):
-            clr_mu2_dict[id] = clr_mu2[i]
-        
-        sum = 0
-        for id in all_ids.keys():
-            if id in clr_mu1_dict and id in clr_mu2_dict:
-                sum += (clr_mu1_dict[id] - clr_mu2_dict[id]) ** 2
-            elif id in clr_mu1_dict:
-                sum += clr_mu1_dict[id] ** 2
-            elif id in clr_mu2_dict:
-                sum -= clr_mu2_dict[id] ** 2
-        
-        return math.sqrt(sum)
         
         

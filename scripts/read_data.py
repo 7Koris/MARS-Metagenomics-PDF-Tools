@@ -16,6 +16,9 @@ class Read:
     def get_assignment(self):
         return self.assigned_taxon_id
     
+    def get_hash(self):
+        return self.hash
+    
     def __init__(self, hash: str, id):
         self.hash = hash
         self.assigned_taxon_id = id

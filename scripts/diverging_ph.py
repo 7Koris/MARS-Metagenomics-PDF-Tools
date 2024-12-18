@@ -66,7 +66,7 @@ def generate_diverging_sk(output_name, all_read_data_names, all_read_data):
 	   
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Beta Diversity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+	parser = argparse.ArgumentParser(description="Diverging Phylum", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 	parser.add_argument("-f", "--files", nargs='+', help="Files to compare")
  
 	args = parser.parse_args()
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 	# if no files given
 	if files == None:
 		files = []
-		dir_files = listdir("reads")
+		dir_files = listdir("../reads")
 		for file in dir_files:
 			if path.splitext(file)[1] != ".p":
 				continue
@@ -93,7 +93,7 @@ if __name__ == "__main__":
 		current_name = path.splitext(file)[0]
 		output_prefix += current_name + "_"
 		read_data = rd.ReadData()
-		read_data.load_data(pickle.load(open("reads/" + file, "rb")))
+		read_data.load_data(pickle.load(open("../reads/" + file, "rb")))
 		all_read_data.append(read_data)
 		all_read_data_names.append(current_name)
 

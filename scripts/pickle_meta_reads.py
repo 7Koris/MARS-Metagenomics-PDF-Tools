@@ -9,7 +9,7 @@ from os import path
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="Takes MetaMaps reads and loads into a pickle file for analysis.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-	parser.add_argument("-mtsv", "--mtsv-file",  type=str, help="MTSV File")
+	parser.add_argument("-meta", "--meta-maps-file",  type=str, help="MetaMaps Reads2Taxon File")
 	parser.add_argument("-p", "--prune-level", type=str, help="Prune reads to given level", default=None)
 	parser.add_argument("-s", "--seed", type=int, help="Seed for random number generator", default=0)
 	parser.add_argument("-a", "--alias", type=str, help="Alias for file", default=None)

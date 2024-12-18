@@ -169,8 +169,7 @@ if __name__ == "__main__":
     
     file_prefix = config["classification_file_prefix"]
     min_plot_freq = config["min_frequency"]
-    min_tm = config["min_trim_mean"]
-    trim_proportion = config["trim_proportion"]
+    
     output = config["output"]
     ignore_file = config["ignore_ids"]
     skip_coverage_filter = config["skip_coverage_filter"]
@@ -183,4 +182,4 @@ if __name__ == "__main__":
             if id not in excluded_tax_ids:
                 excluded_tax_ids.append(id)
     
-    plot_identities(file_prefix, min_plot_freq, min_tm, trim_proportion, output, excluded_tax_ids, skip_coverage_filter, verbose)
+    plot_identities(file_prefix, min_plot_freq, 0, 0, output, excluded_tax_ids, skip_coverage_filter, verbose)
