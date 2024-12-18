@@ -66,14 +66,15 @@ It's entirely possible that your chosen metagenomics tool in its given configura
 
 Some parameters from pickle_filtered_reads.py can be used to normalize or filter read data based on certain criteria.
 **If you wish to normalize by the number of reads**, rarefaction and [SRS](https://github.com/vitorheidrich/SRS) are provided. Please configure R in your environment if you will be using [SRS](https://github.com/vitorheidrich/SRS).
-- Rarefaction (to 1000 reads)
+- Rarefaction (to 10000 reads)
   - ```python ./pickle_meta_reads.py  -meta <basename>.EM.reads2Taxon -a myData -r 10000```
-- [SRS](https://github.com/vitorheidrich/SRS) (to 1000 reads)
+- [SRS](https://github.com/vitorheidrich/SRS) (to 10000 reads)
   - ```python ./pickle_meta_reads.py  -meta <basename>.EM.reads2Taxon -a myData -r 10000 -S```
 
 ### [Experimental SigBin Filtering]
 An improvised filtering method exists to identify 'false positives' like the one below.
 ![False Positive](falsepositive.png)
+
 This is done by assigning concatenated reads into histogram bins and counting the number of bins. If the bin count is too small, all associated reads are discarded. 
 - You can try out sigbin filtering with
   - ```python ./pickle_meta_reads.py  -meta <basename>.EM.reads2Taxon -a myData -B```
