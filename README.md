@@ -56,7 +56,7 @@ We will use the terminal for this step. The argument '-a' provides the alias we 
   - ```python ./pickle_mtsv_reads.py -meta <basename>.EM.reads2Taxon -a myData```
   
 - or for MTSV
-  - ```python ./pickle_mtsv_reads.py -mtsv <basename>.txt -mtsl <lookupname>.txt -a myData```
+  - ```python ./pickle_mtsv_reads.py -mtsv <basename>.txt -mtsvl <lookupname>.txt -a myData```
   
 Note that **-mtsv** is for the mtsv output data and **--mtsvl** is for the lookup file that contains MetaMaps-style read hashes for each MTSV read. For information on how to generate a mtsv_metamaps_lookup_table please see [MTSV](https://github.com/FofanovLab/MTSv). The lookup file requirement exists for experimental filtering reasons and may be removed in the near future.
 
