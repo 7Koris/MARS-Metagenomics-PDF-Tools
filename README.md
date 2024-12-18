@@ -81,13 +81,13 @@ This is done by assigning concatenated reads into histogram bins and counting th
 
 ### [Generating Reports]
 With our reads pickled, generating our reports will be very straightforward.
-- [Alpha Diversity Report](#alpha_diversity_report.py)
+- [Alpha Diversity Report](#scripts/alpha_diversity_report.py)
   - ```python alpha_diversity_report.py -f <file>.p```
-- [Beta Diversity Report](#beta_diversity_report.py) (Needs multiple files)
+- [Beta Diversity Report](#scripts/beta_diversity_report.py) (Needs multiple files)
   - ```python beta_diversity_report.py -f <file1>.p <file2>.p <file3>.p```
-- [Diveging Phylum Report](#diverging_ph.py) (Needs multiple files)
+- [Diveging Phylum Report](#scripts/diverging_ph.py) (Needs multiple files)
   - ```python diverging_ph.py -f <file1>.p <file2>.p <file3>.p```
-- [Genus Tree Report](#beta_diversity_report.py) (Output opened in browser)
+- [Genus Tree Report](#scripts/genus_tree.py) (Output opened in browser)
   - ```python genus_tree.py -f <file>.p```
   
 Reports will be saved in the /reports/ directory directly outside of the folder the scripts are in.
