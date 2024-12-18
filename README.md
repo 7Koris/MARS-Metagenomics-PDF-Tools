@@ -94,10 +94,10 @@ Reports will be saved in the /reports/ directory directly outside of the folder 
 
 ### [BERTax Reports]
 If you wish to test BERTax's performance, you should feed annotated .fasta files with IDs in the format of "kraken:taxid|2254|NZ_CP104742.1". You can feed one or more of the files produced by BERTax thereafter into a confusion matrix generating script to evaluate performance:
-- ```python bertax_cm_matrix.py -f <file1>.p <file2>.p <file3>.p```
+- ```python bertax_cm_matrix.py -f <file1>.txt <file2>.txt <file3>.txt```
 
 If you want a quick barplot summary of BERTax's classifications, you can feed BERTax's results into the following script:
-- ```python bertax_summary.py -f <file>.p```
+- ```python bertax_summary.py -f <file>.txt```
 
 # Identity EM Reports
 You should generate an Identity EM report if you need organism level analysis.
