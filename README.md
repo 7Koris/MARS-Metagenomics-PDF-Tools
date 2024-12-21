@@ -32,10 +32,10 @@ These scripts generate reports for Alpha diversity, Beta diversity, and direct r
     - Creates confusion matrices at the superkingdom, phylum, and genus levels 
  
 ### Genus-level TreeMap Plots
-- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/241.html
-- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/247.html
-- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/325.html
-- https://kamranaway.github.io/MARS-Metagenomics-PDF-Tools/337.html
+- https://7koris.github.io/MARS-Metagenomics-PDF-Tools/241.html
+- https://7koris.github.io/MARS-Metagenomics-PDF-Tools/247.html
+- https://7koris.github.io/MARS-Metagenomics-PDF-Tools/325.html
+- https://7koris.github.io/MARS-Metagenomics-PDF-Tools/337.html
 
 ## Getting Started
 The workflow using these scripts is based on the data you have and what needs you have.
